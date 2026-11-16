@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controle de Estoque · AllavaDrop</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef1f5;color:#1b2533}
+button,input,select{font:inherit}button{cursor:pointer}
+.fixo{position:sticky;top:0;z-index:10;box-shadow:0 2px 6px #0002}
+.top{background:#142b45;color:#fff;padding:12px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.top h1{font-size:18px;margin:0;flex:1}.top .note{color:#c9d6e3}
+.tabs{display:flex;gap:6px;padding:0 20px;background:#fff;border-bottom:1px solid #d9e0e8}
+.tab{padding:14px 18px;border:0;background:none;font-weight:700;color:#5b6b7d;border-bottom:3px solid transparent}
+.tab.on{color:#0b8b62;border-color:#10a36f}
+.bar{display:none;gap:10px;align-items:center;flex-wrap:wrap;background:#f7f9fb;border-bottom:1px solid #d9e0e8;padding:10px 20px}
+.bar.on{display:flex}
+.sep{width:1px;align-self:stretch;background:#d3dbe4;margin:0 4px}
+.bar-t{font-weight:700;font-size:13px;color:#26384b}
+.panel{display:none;padding:16px 20px}.panel.on{display:block}
+.btn{border:0;border-radius:8px;padding:10px 16px;font-weight:700;background:#e5ebf1;color:#26384b;min-height:42px;display:inline-flex;align-items:center;white-space:nowrap}
+.btn.primary{background:#10b981;color:#04130d}.btn.dark{background:#142b45;color:#fff}.btn.warn{background:#f59e0b;color:#1f1300}.btn.blue{background:#2563eb;color:#fff}
+.btn.small{padding:6px 10px;min-height:32px;font-size:12px}.btn:disabled{opacity:.4;cursor:not-allowed}
+input[type=file]{display:none}
+input[type=search],input[type=text],input[type=number],select{border:1px solid #c8d2dc;border-radius:8px;padding:9px 11px;min-height:42px;background:#fff}
+.note{font-size:12px;color:#66768a}.mono{font-family:"Courier New",monospace;font-weight:700}
+.empty{padding:30px;text-align:center;color:#738194}
+.card{background:#fff;border:1px solid #e0e6ed;border-radius:10px;padding:14px}.card h2{font-size:16px;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr);gap:14px}
+.srch{display:flex;gap:8px;margin-bottom:6px}
+.srch input{flex:1;min-width:0;font-size:16px}
+.results{max-height:60vh;overflow:auto;border:1px solid #e3e8ee;border-radius:8px;margin-top:8px}
+.res{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid #eef1f4;background:#fff;padding:9px;cursor:pointer}
+.res:hover{background:#ecf9f3}.res.cur{background:#eaf8f1}.res .nm{flex:1;font-size:13px;font-weight:600}.res .sk{font-size:11px;color:#68788b}
+.th{width:42px;height:42px;border-radius:6px;object-fit:cover;background:#e9eef3;flex:none}
+.badge{background:#e8f6ef;color:#08734f;border-radius:99px;padding:3px 8px;font-size:11px;font-weight:700;white-space:nowrap}
+.badge.g{background:#eef2f6;color:#4b5b6c}
+.code{display:inline-block;background:#eef2f6;border-radius:6px;padding:2px 7px;font-size:11px;margin:2px 4px 0 0}
+.log{max-height:40vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.lg{border:1px solid #e7ebef;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45}.lg time{color:#8592a0;font-size:11px}
+.lst{border-top:1px solid #eef1f4;padding:8px 0;font-size:12px}
+.lst-h{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:13px;gap:6px}
+.lst-i{display:flex;justify-content:space-between;gap:6px;padding:3px 0}.lst-i button{border:0;background:none;color:#b42318}
+.lst-i span{cursor:pointer;color:#0b5f8a;text-decoration:underline}
+.scan-line{display:grid;grid-template-columns:1fr 90px 100px auto auto;gap:8px;align-items:center;border-bottom:1px solid #eef1f4;padding:8px 0}
+.scan-line.bad{background:#fff4f2}.scan-line.warn{background:#fff9e6}
+.prev{max-width:100%;max-height:360px;border-radius:8px;margin-top:10px;display:block}
+.rowb{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap}
+.mbg{display:none;position:fixed;inset:0;background:#14202dc0;z-index:20;align-items:center;justify-content:center;padding:14px}.mbg.open{display:flex}
+#cbg{z-index:30}
+.modal{background:#fff;width:min(600px,100%);max-height:92vh;overflow:auto;border-radius:14px;padding:18px;position:relative}
+.modal h2{font-size:17px;margin:0 30px 4px 0}
+.x{position:absolute;right:12px;top:12px;border:0;background:#eef2f6;border-radius:8px;padding:6px 10px}
+#reader{width:100%;margin-top:10px;border-radius:10px;overflow:hidden;background:#000;min-height:220px}
+#clast .res{border:1px solid #9fdcc1;border-radius:8px;margin-top:10px;background:#eaf8f1}
+.big{width:100%;max-height:320px;object-fit:contain;background:#f1f4f7;border-radius:10px;margin:12px 0}
+.nophoto{background:#f1f4f7;border-radius:10px;padding:26px;text-align:center;color:#7b8898;margin:12px 0}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.action{border:1px solid #cbd8e2;background:#fff;border-radius:10px;padding:12px;font-weight:700;color:#34495c}
+.action.sel{border-color:#10a36f;background:#eaf8f1;color:#08734f}
+.frm{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}.frm input[type=number]{width:120px;font-size:18px}
+.alert{background:#fff9e6;border:1px solid #f1d58a;border-radius:8px;padding:10px;margin:10px 0;font-size:13px}
+.ok{background:#eaf8f1;border:1px solid #9fdcc1;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:13px;color:#08734f}
+.info{display:grid;grid-template-columns:130px 1fr;gap:6px 10px;font-size:13px;margin:10px 0}.info b{color:#4b5b6c}
+.step{border:1px solid #e3e8ee;border-radius:10px;padding:10px;margin-top:10px}
+.fmt{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}.fmt td,.fmt th{border:1px solid #d6dee6;padding:6px 8px;text-align:left}.fmt th{background:#f1f4f7}
+#relatorio{display:none}
+#sheets{overflow:auto}
+.page{position:relative;width:297mm;height:210mm;margin:0 auto 12px;background:#fff;overflow:hidden;color:#000;page:folha}
+.page .a{position:absolute}
+.blk{background:#000}
+.row{left:10mm;width:277mm;height:7.2mm;border-bottom:.2mm solid #999}
+.row.ev{background:#f2f2f2}
+.bx{width:4.2mm;height:4.2mm;border:.25mm solid #222;border-radius:.7mm;background:#fff;font:5pt Arial,sans-serif;color:#aaa;display:flex;align-items:center;justify-content:center}
+.gh{height:4mm;line-height:4mm;text-align:center;font-size:6.2pt;font-weight:700;background:#222;color:#fff}
+.cn{font-size:6.5pt;color:#444;width:7mm;text-align:center}
+.cs{width:36mm;height:7.2mm;display:flex;align-items:center;font:700 8pt "Courier New",monospace;line-height:1.05;overflow-wrap:anywhere}
+.cs.l{font-size:5.8pt}
+.cp{width:57mm;height:7.2mm;display:flex;align-items:center;font-size:6.3pt;line-height:1.1;overflow:hidden}
+@media(max-width:820px){.grid{grid-template-columns:1fr}.scan-line{grid-template-columns:1fr 1fr}.panel{padding:12px}.bar{padding:8px 12px}.sep{display:none}.info{grid-template-columns:110px 1fr}}
+@page{size:A4 portrait;margin:12mm}
+@page folha{size:A4 landscape;margin:0}
+@media print{
+  body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .fixo,.mbg,.panel{display:none!important}
+  body[data-print=tudo] #tudo{display:block!important;padding:0}
+  body[data-print=tudo] .page{margin:0;break-after:page}
+  body[data-print=leitura] #relatorio{display:block}
+  #relatorio table{width:100%;border-collapse:collapse;font-size:9pt}
+  #relatorio th,#relatorio td{border:1px solid #999;padding:4px 6px;text-align:left}
+  #relatorio h2{font-size:13pt;margin:14px 0 6px}
+}
+</style>
+</head>
+<body>
+<div class="fixo">
+  <header class="top">
+    <h1>Controle de Estoque</h1>
+    <span class="note" id="count"></span>
+    <button class="btn primary" id="bimp">📥 Importar planilha</button>
+    <input id="imp" type="file" accept=".xlsx,.xls,.csv">
+  </header>
+  <nav class="tabs">
+    <button class="tab on" data-tab="tudo">TUDO</button>
+    <button class="tab" data-tab="leitura">LEITURA DE ESTOQUE</button>
+  </nav>
+  <div class="bar on" data-for="tudo">
+    <label class="note">Imprimir:</label><select id="filtro"></select>
+    <button class="btn primary" id="pr-tudo">🖨️ Imprimir folhas</button>
+    <span class="note" id="sheet-info"></span>
+  </div>
+  <div class="bar" data-for="leitura">
+    <button class="btn blue" id="blist">🗂️ Lista rápida</button>
+    <button class="btn warn" id="bquick">⚡ Contagem rápida</button>
+    <button class="btn primary" id="pr-leitura">🖨️ Imprimir histórico e listas</button>
+    <button class="btn" id="limpar">Limpar histórico</button>
+    <span class="sep"></span>
+    <span class="bar-t">📸 Ler por foto</span>
+    <button class="btn dark" id="bfoto">📸 Tirar foto</button>
+    <input id="scan" type="file" accept="image/*" capture="environment">
+    <input id="hw" type="file" accept="image/*" capture="environment">
+    <label class="note">Folha:</label><select id="scan-pg"></select>
+    <span class="note">Conjunto: <b id="scan-set"></b></span>
+  </div>
+</div>
+
+<section id="tudo" class="panel on">
+  <div id="sheets"></div>
+</section>
+
+<section id="leitura" class="panel">
+  <div class="card" style="margin-bottom:14px">
+    <h2>Leitura da folha padrão (sem IA, offline)</h2>
+    <p id="scan-st" class="note">Imprima a folha com o mesmo filtro da aba TUDO. Tire a foto de cima, com os 4 quadrados pretos visíveis, papel sobre fundo claro e boa luz.</p>
+    <img id="scan-prev" class="prev" hidden alt="">
+    <div id="scan-res"></div>
+  </div>
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Localizar produto</h2>
+        <div class="srch">
+          <input id="busca" type="search" placeholder="Descrição, SKU ou código de barras" autocomplete="off">
+          <button class="btn dark" id="bcam">📷 Ler código</button>
+        </div>
+        <div class="note">Leitor USB/Bluetooth: clique na busca e bipe o código.</div>
+        <div id="results" class="results"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card"><h2>🗂️ Listas</h2><div id="lists"></div></div>
+      <div class="card" style="margin-top:14px"><h2>⚡ Contagem rápida</h2><div id="quick"></div></div>
+      <div class="card" style="margin-top:14px"><h2>Registro do que foi feito</h2><div id="log" class="log"></div></div>
+    </div>
+  </div>
+</section>
+
+<div id="relatorio"></div>
+<div id="mbg" class="mbg"><div class="modal"><button class="x" id="mclose">✕</button><div id="mbody"></div></div></div>
+<div id="cbg" class="mbg"><div class="modal"><button class="x" id="cclose">✕</button><h2 id="ctit">📷 Ler código de barras</h2><div class="note">Aponte a câmera para o código, na horizontal e com boa luz.</div><div id="reader"></div><p id="cst" class="note"></p><div id="clast"></div></div></div>
+
+<script>
+const K='allava_estoque_v1',KP='allava_fotos_v1',KQ='allava_fotos_rapida_v1';
+let S=JSON.parse(localStorage.getItem(K)||'null')||{};
+S.items=S.items||[];S.logs=S.logs||[];S.lists=S.lists||[];S.ean=S.ean||{};S.quick=S.quick||[];
+S.lists.forEach(l=>{l.skus=l.skus||[];l.q=l.q||{}});
+let P=JSON.parse(localStorage.getItem(KP)||'{}'),PQ=JSON.parse(localStorage.getItem(KQ)||'{}');
+let cur=null,act=null,scan=[],lastImg=null,qr=null,camCb=null,camKeep=false,camClose=null,camLast='',camLastT=0,Q=null,QL=null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const key=s=>String(s).replace(/\s/g,'').toUpperCase();
+const bySku=s=>S.items.find(x=>x.sku===s)||S.items.find(x=>key(x.sku)===key(s));
+const save=()=>localStorage.setItem(K,JSON.stringify(S));
+const store=(k,o)=>{try{localStorage.setItem(k,JSON.stringify(o));return true}catch(e){alert('Memória de fotos do navegador cheia. Exclua registros antigos da contagem rápida.');return false}};
+const saveP=()=>store(KP,P),saveQ=()=>store(KQ,PQ);
+function log(name,msg){S.logs.push({t:new Date().toLocaleString('pt-BR'),name,msg});save();renderLog()}
+const search=(q,lim)=>{const ws=norm(q).split(/\s+/).filter(Boolean);return S.items.filter(x=>{const t=norm(x.name+' '+x.sku+' '+codesOf(x).join(' '));return ws.every(w=>t.includes(w))}).slice(0,lim)};
+const thumb=s=>P[s]?`<img class="th" src="${P[s]}" alt="">`:'<span class="th"></span>';
+const resRow=(x,attr,badge,cls='')=>`<button class="res ${cls}" ${attr}="${esc(x.sku)}">${thumb(x.sku)}<span class="nm">${esc(x.name)}<br><span class="sk mono">${esc(x.sku)}${codesOf(x)[0]?' · '+esc(codesOf(x)[0]):''}</span></span><span class="badge">${badge??x.saldo+' un.'}</span></button>`;
+const newList=n=>{S.lists.push({name:n,skus:[],q:{}});return S.lists.length-1};
+
+/* ===== Código de barras ===== */
+const codesOf=x=>[...new Set([x.ean,...Object.keys(S.ean).filter(k=>S.ean[k]===x.sku)].filter(Boolean).map(key))];
+function byCode(c){
+  c=key(c);if(!c)return null;
+  if(S.ean[c]){const x=bySku(S.ean[c]);if(x)return x}
+  return S.items.find(x=>x.ean&&key(x.ean)===c)||S.items.find(x=>key(x.sku)===c)||null;
+}
+function handleCode(code){
+  code=key(code);if(!code)return;
+  const x=byCode(code);
+  if(x)openItem(x.sku);else openLink(code);
+}
+function linkBox(code,onPick){
+  return{html:`<div class="alert">Código <b class="mono">${esc(code)}</b> não cadastrado. Escolha o produto para vincular. Nas próximas leituras ele será reconhecido.</div>
+  <input id="lk" type="search" placeholder="Buscar por descrição ou SKU" style="width:100%" autocomplete="off"><div id="lkr" class="results" style="max-height:220px"></div>`,
+  bind(){const draw=()=>{const r=search($('#lk').value,40);$('#lkr').innerHTML=r.length?r.map(x=>resRow(x,'data-sku','Vincular')).join(''):'<div class="empty">Nenhum produto encontrado.</div>'};
+    $('#lk').oninput=draw;draw();
+    $('#lkr').onclick=e=>{const b=e.target.closest('.res');if(!b)return;const x=bySku(b.dataset.sku);
+      S.ean[code]=x.sku;save();log(x.name,`Código de barras ${code} vinculado.`);renderResults();onPick(x)}}};
+}
+function openLink(code){
+  const lb=linkBox(code,x=>openItem(x.sku));
+  $('#mbody').innerHTML='<h2>Código não cadastrado</h2>'+lb.html;lb.bind();
+  $('#mbg').classList.add('open');setTimeout(()=>$('#lk').focus(),50);
+}
+async function openCam(cb,keep=false,onClose=null){
+  if(typeof Html5Qrcode==='undefined')return alert('Leitor de câmera não carregou. Verifique a internet.');
+  camCb=cb||handleCode;camKeep=keep;camClose=onClose;camLast='';
+  $('#ctit').textContent=keep?'📷 Leitura contínua':'📷 Ler código de barras';
+  $('#clast').innerHTML='';
+  $('#cbg').classList.add('open');$('#cst').textContent='Iniciando câmera...';
+  const F=Html5QrcodeSupportedFormats;
+  qr=new Html5Qrcode('reader',{verbose:false,formatsToSupport:[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.QR_CODE],experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
+  try{
+    await qr.start({facingMode:'environment'},{fps:12,qrbox:(w,h)=>({width:Math.min(320,w*.9)|0,height:Math.min(160,h*.5)|0})},async txt=>{
+      const c=key(txt);
+      if(camKeep){const n=Date.now();if(c===camLast&&n-camLastT<2500)return;camLast=c;camLastT=n;navigator.vibrate?.(80);camCb(c);return}
+      const cb=camCb;await closeCam();navigator.vibrate?.(80);cb(c);
+    });
+    $('#cst').textContent=keep?'Vá passando os códigos. Feche (✕) ao terminar.':'Procurando código...';
+  }catch(e){$('#cst').textContent='❌ Não foi possível abrir a câmera. Permita o acesso e use HTTPS. ('+(e.message||e)+')'}
+}
+async function closeCam(){
+  $('#cbg').classList.remove('open');
+  if(qr){const q=qr;qr=null;try{if(q.isScanning)await q.stop();q.clear()}catch(e){}}
+  const oc=camClose;camClose=null;camKeep=false;oc?.();
+}
+$('#bcam').onclick=()=>openCam(handleCode);
+$('#cclose').onclick=closeCam;
+$('#cbg').onclick=e=>{if(e.target.id==='cbg')closeCam()};
+function bipInput(inp,cb,onType){
+  let t0=0,tm=null;
+  inp.addEventListener('input',()=>{const v=inp.value;if(v.length===1)t0=Date.now();onType?.();clearTimeout(tm);
+    tm=setTimeout(()=>{const t=v.trim();if(/^\d{8,14}$/.test(t)&&Date.now()-t0<600&&inp.value.trim()===t){inp.value='';onType?.();cb(t)}},120)});
+  return()=>clearTimeout(tm);
+}
+
+/* ===== Geometria da folha (mm) ===== */
+const ROWS=22;
+const G={
+  rowTop:i=>30+7.2*i,
+  boxX:(k,d)=>k<4?113.2+41*k+(d-1)*4.45:277.2,
+  BOX:4.2,
+  marks:[[6,6],[291,6],[291,204],[6,204]],
+  bitX:b=>30+6*b, bitY:201, BIT:3
+};
+function setItems(){const f=$('#filtro').value;return f===''?S.items:(S.lists[+f]?.skus||[]).map(bySku).filter(Boolean)}
+function setName(){const f=$('#filtro').value;return f===''?'Todos os itens':'Lista: '+(S.lists[+f]?.name||'')}
+
+/* ===== Importação ===== */
+const COLS=[['name','Descrição',['descricao','produto','titulo','nome']],['ean','Código de Barras',['codigo de barras','cod barras','codigo barras','cod. barras','ean','gtin','barcode']],['sku','SKU',['sku']],['saldo','Quantidade',['quantidade','qtd','qtde','saldo','estoque']]];
+$('#bimp').onclick=()=>{
+  $('#mbody').innerHTML=`<h2>📥 Importar planilha</h2>
+  <p class="note">Arquivo <b>.xlsx</b>, <b>.xls</b> ou <b>.csv</b>, primeira aba, com estas colunas:</p>
+  <table class="fmt"><tr><th>Coluna</th><th>Campo</th><th>Exemplo</th><th></th></tr>
+  <tr><td>A</td><td><b>Descrição</b></td><td>Perfume 9PM Elixir 100ml</td><td>obrigatório</td></tr>
+  <tr><td>B</td><td><b>Código de Barras</b></td><td>7891234567890</td><td>opcional</td></tr>
+  <tr><td>C</td><td><b>SKU</b></td><td>9PM-ELX-100</td><td>obrigatório*</td></tr>
+  <tr><td>D</td><td><b>Quantidade</b></td><td>12</td><td>número inteiro</td></tr></table>
+  <p class="note">A 1ª linha deve ser o cabeçalho. Com cabeçalho, as colunas são achadas pelo nome em qualquer ordem. Sem cabeçalho, vale a ordem A-B-C-D.<br>* Sem SKU, o código de barras é usado como SKU.<br>Formate a coluna de código de barras como <b>Texto</b> no Excel para não perder dígitos.</p>
+  <div class="frm"><label class="btn primary" for="imp">Escolher arquivo</label><button class="btn" id="tpl">⬇️ Baixar modelo</button></div>`;
+  $('#tpl').onclick=()=>{const ws=XLSX.utils.aoa_to_sheet([COLS.map(c=>c[1]),['Perfume 9PM Elixir 100ml','7891234567890','9PM-ELX-100',12]]);
+    ws['!cols']=[{wch:40},{wch:18},{wch:18},{wch:12}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Estoque');XLSX.writeFile(wb,'modelo_estoque.xlsx')};
+  $('#mbg').classList.add('open');
+};
+const cell=v=>typeof v==='number'?(Number.isInteger(v)?v.toFixed(0):String(v)):String(v??'').trim();
+$('#imp').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  const wb=XLSX.read(await f.arrayBuffer());
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+  if(!rows.length)return alert('Planilha vazia.');
+  const hd=rows[0].map(h=>norm(h).trim());
+  let idx=COLS.map(c=>hd.findIndex(h=>c[2].includes(h)));
+  let start=1;
+  if(idx[0]<0||idx[3]<0){idx=[0,1,2,3];start=isNaN(parseFloat(rows[0][3]))?1:0}
+  const novos=[],seen=new Set();let ign=0;
+  rows.slice(start).forEach(r=>{
+    const name=cell(r[idx[0]]),ean=idx[1]>=0?cell(r[idx[1]]):'';let sku=idx[2]>=0?cell(r[idx[2]]):'';
+    if(!sku)sku=ean;
+    if(!name||!sku||seen.has(sku)){if(name||sku)ign++;return}
+    seen.add(sku);novos.push({name,ean,sku,saldo:Math.round(Number(String(r[idx[3]]).replace(',','.'))||0)});
+  });
+  if(!novos.length)return alert('Nenhum item válido. Use as colunas: Descrição, Código de Barras, SKU, Quantidade.');
+  const old=new Map(S.items.map(x=>[x.sku,x.saldo]));let mud=0;
+  novos.forEach(n=>{if(old.has(n.sku)&&old.get(n.sku)!==n.saldo)mud++});
+  const ne=novos.filter(n=>n.ean).length;
+  S.items=novos;save();
+  log('Sistema',`Planilha "${f.name}" importada: ${novos.length} itens${old.size?`, ${mud} quantidades alteradas`:''}, ${ne} com código de barras${ign?`, ${ign} linhas ignoradas (sem descrição/SKU ou SKU repetido)`:''}.`);
+  $('#mbg').classList.remove('open');renderAll();
+};
+
+/* ===== Aba TUDO ===== */
+function renderFiltro(){
+  const v=$('#filtro').value;
+  $('#filtro').innerHTML='<option value="">Todos os itens</option>'+S.lists.map((l,i)=>`<option value="${i}">Lista: ${esc(l.name)} (${l.skus.length})</option>`).join('');
+  if([...$('#filtro').options].some(o=>o.value===v))$('#filtro').value=v;
+}
+const A=(cls,l,t,st='',html='')=>`<div class="a ${cls}" style="left:${l}mm;top:${t}mm;${st}">${html}</div>`;
+function renderSheets(){
+  const its=setItems();
+  renderScanPg();
+  if(!its.length){$('#sheets').innerHTML='<div class="empty">Importe a planilha de estoque no botão do topo.</div>';$('#sheet-info').textContent='';return}
+  const pages=Math.ceil(its.length/ROWS),ln=$('#filtro').value===''?'':' · '+esc(setName());
+  const heads=['MILHAR ×1000','CENTENA ×100','DEZENA ×10','UNIDADE ×1'].map((t,k)=>A('gh',G.boxX(k,1),25,'width:39.8mm',t)).join('')+A('gh',G.boxX(4),25,'width:4.2mm','0');
+  let h='';
+  for(let p=0;p<pages;p++){
+    h+='<section class="page">';
+    h+=A('blk',3,3,'width:6mm;height:6mm')+A('blk',289,4,'width:4mm;height:4mm')+A('blk',289,202,'width:4mm;height:4mm')+A('blk',4,202,'width:4mm;height:4mm');
+    for(let b=0;b<8;b++)if(((p+1)>>b)&1)h+=A('blk',G.bitX(b),G.bitY,`width:${G.BIT}mm;height:${G.BIT}mm`);
+    h+=A('',12,10,'font-size:13pt;font-weight:700',`CONTAGEM DE ESTOQUE${ln}`);
+    h+=A('',150,11.5,'font-size:8.5pt','Data: ____/____/________ &nbsp;&nbsp; Contador: ____________________');
+    h+=A('',255,9.5,'font-size:14pt;font-weight:700;border:.5mm solid #000;padding:0 2mm;line-height:6.5mm',`FOLHA ${String(p+1).padStart(2,'0')}/${String(pages).padStart(2,'0')}`);
+    h+=A('',12,18.5,'font-size:6.8pt;white-space:nowrap','Marque um X no dígito de cada casa. Casa em branco = 0. Ex.: 237 → X no 2 da CENTENA, 3 da DEZENA, 7 da UNIDADE. Contou e não há nada → X no 0. Não risque fora das caixas nem nos quadrados pretos.');
+    h+=A('cn',10,25.5,'font-weight:700','#')+A('',17,25.5,'font-size:6.5pt;font-weight:700','SKU')+A('',54,25.5,'font-size:6.5pt;font-weight:700','DESCRIÇÃO')+heads;
+    its.slice(p*ROWS,(p+1)*ROWS).forEach((it,i)=>{
+      const y=G.rowTop(i);
+      h+=A('row'+(i%2?' ev':''),10,y)+A('cn',10,y+2.6,'',p*ROWS+i+1)+A('cs'+(it.sku.length>20?' l':''),17,y,'',esc(it.sku))+A('cp',54,y,'',esc(it.name));
+      for(let k=0;k<4;k++)for(let d=1;d<=9;d++)h+=A('bx',G.boxX(k,d),y+1.5,'',d);
+      h+=A('bx',G.boxX(4),y+1.5,'',0);
+    });
+    h+='</section>';
+  }
+  $('#sheets').innerHTML=h;$('#sheet-info').textContent=`${its.length} itens · ${pages} folhas · imprimir em A4 paisagem, sem margens`;
+}
+$('#filtro').onchange=renderSheets;
+$('#pr-tudo').onclick=()=>{document.body.dataset.print='tudo';window.print()};
+
+/* ===== Aba LEITURA ===== */
+function renderResults(){
+  const r=search($('#busca').value,80);
+  $('#results').innerHTML=r.length?r.map(x=>resRow(x,'data-sku')).join(''):'<div class="empty">Nenhum produto encontrado.</div>';
+}
+const stopBusca=bipInput($('#busca'),t=>{navigator.vibrate?.(80);handleCode(t)},renderResults);
+$('#busca').onkeydown=e=>{
+  if(e.key!=='Enter')return;e.preventDefault();stopBusca();
+  const v=$('#busca').value.trim();if(!v)return;
+  const x=byCode(v);
+  if(x){$('#busca').value='';renderResults();navigator.vibrate?.(80);return openItem(x.sku)}
+  const r=$('#results').querySelectorAll('.res');
+  if(r.length===1)return openItem(r[0].dataset.sku);
+  if(/^\d{8,14}$/.test(v)){$('#busca').value='';renderResults();openLink(key(v))}
+};
+$('#results').onclick=e=>{const b=e.target.closest('.res');if(b)openItem(b.dataset.sku)};
+function renderLog(){
+  $('#log').innerHTML=S.logs.length?S.logs.slice().reverse().map(l=>`<div class="lg"><b>${esc(l.name)}</b><br>${esc(l.msg)}<br><time>${esc(l.t)}</time></div>`).join(''):'<div class="empty">As ações aparecerão aqui, linha a linha.</div>';
+}
+$('#limpar').onclick=()=>{if(confirm('Limpar todo o histórico?')){S.logs=[];save();renderLog()}};
+function renderLists(){
+  $('#lists').innerHTML=S.lists.length?S.lists.map((l,i)=>`<div class="lst"><div class="lst-h"><span>${esc(l.name)} (${l.skus.length} itens · ${l.skus.reduce((s,k)=>s+(l.q[k]||0),0)} un.)</span><span><button class="btn small blue" data-go="${i}">Ler</button> <button class="btn small" data-dl="${i}">Excluir</button></span></div>${l.skus.map(s=>{const x=bySku(s);return`<div class="lst-i"><span data-open="${esc(s)}">${esc(x?x.name:s)}${l.q[s]?` · ${l.q[s]} na lista`:''}</span><button data-rm="${i}|${esc(s)}">✕</button></div>`}).join('')}</div>`).join(''):'<div class="note">Nenhuma lista. Use <b>🗂️ Lista rápida</b> na barra para criar e ir bipando.</div>';
+  renderFiltro();
+}
+$('#lists').onclick=e=>{
+  const d=e.target.dataset;
+  if(d.open)return openItem(d.open);
+  if(d.go!==undefined){QL={i:+d.go,last:null,unk:null,msg:''};drawQL();return $('#mbg').classList.add('open')}
+  if(d.dl!==undefined&&confirm('Excluir esta lista?')){S.lists.splice(+d.dl,1)}
+  else if(d.rm){const[i,...s]=d.rm.split('|');const l=S.lists[+i],sk=s.join('|');l.skus=l.skus.filter(x=>x!==sk);delete l.q[sk]}
+  else return;
+  save();renderLists();renderSheets();
+};
+
+/* ===== LISTA RÁPIDA ===== */
+$('#blist').onclick=()=>{QL={i:null,last:null,unk:null,msg:''};drawQL();$('#mbg').classList.add('open')};
+function qlAddSku(sku){
+  const l=S.lists[QL.i],x=bySku(sku);if(!x)return null;
+  if(!l.skus.includes(sku))l.skus.push(sku);
+  l.q[sku]=(l.q[sku]||0)+1;
+  QL.last=sku;QL.unk=null;QL.msg=`+1 ${x.name} (agora ${l.q[sku]} na lista)`;
+  save();log(x.name,`Lista "${l.name}": +1 (total ${l.q[sku]}).`);renderLists();renderSheets();drawQL();
+  return x;
+}
+function qlAdd(code){
+  const x=byCode(code);
+  if(x)return qlAddSku(x.sku);
+  QL.unk=key(code);QL.last=null;QL.msg='';drawQL();return null;
+}
+function qlCard(x,l){
+  const ph=P[x.sku],n=l.q[x.sku]||0;
+  return`<div class="step" style="border-color:#10a36f">
+  ${ph?`<img class="big" src="${ph}" alt="">`:'<div class="nophoto">Sem foto vinculada</div>'}
+  <div class="info"><b>Descrição</b><span>${esc(x.name)}</span><b>Código de barras</b><span class="mono">${esc(codesOf(x).join(', ')||'—')}</span>
+  <b>SKU</b><span class="mono">${esc(x.sku)}</span><b>Saldo no sistema</b><span>${x.saldo} un.</span>
+  <b>Qtd na lista</b><span style="font-size:20px;font-weight:700">${n}</span></div>
+  <div class="frm"><button class="btn" data-qd="-1">−1</button><input id="qlq" type="number" min="0" step="1" value="${n}"><button class="btn" data-qd="1">+1</button><button class="btn" data-qd="10">+10</button></div>
+  <div class="frm"><label class="btn dark" for="qlf">${ph?'🔄 Trocar foto':'📷 Incluir foto'}</label><input id="qlf" type="file" accept="image/*" capture="environment"><button class="btn small" id="qlo">Abrir produto</button><button class="btn small" id="qlr" style="color:#b42318">Remover da lista</button></div></div>`;
+}
+function drawQL(){
+  if(QL.i===null||!S.lists[QL.i]){
+    QL.i=null;
+    $('#mbody').innerHTML=`<h2>🗂️ Lista rápida</h2><p class="note">Escolha a lista e vá lendo os códigos. Cada leitura soma 1 unidade na lista.</p>
+    ${S.lists.length?`<div class="frm"><select id="qls">${S.lists.map((l,i)=>`<option value="${i}">${esc(l.name)} (${l.skus.length})</option>`).join('')}</select><button class="btn primary" id="qlgo">Abrir lista</button></div>`:''}
+    <div class="frm"><input id="qln" type="text" style="flex:1" value="Lista ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}"><button class="btn blue" id="qlnew">Criar e começar</button></div>`;
+    if($('#qlgo'))$('#qlgo').onclick=()=>{QL.i=+$('#qls').value;drawQL()};
+    $('#qlnew').onclick=()=>{const n=$('#qln').value.trim();if(!n)return;QL.i=newList(n);save();log('Sistema',`Lista "${n}" criada.`);renderLists();drawQL()};
+    return;
+  }
+  const l=S.lists[QL.i],x=QL.last?bySku(QL.last):null,tot=l.skus.reduce((s,k)=>s+(l.q[k]||0),0);
+  const lb=QL.unk?linkBox(QL.unk,p=>qlAddSku(p.sku)):null;
+  $('#mbody').innerHTML=`<h2>🗂️ ${esc(l.name)}</h2><div class="note">${l.skus.length} itens · ${tot} unidades</div>
+  ${QL.msg?`<div class="ok">✔ ${esc(QL.msg)}</div>`:''}
+  <div class="srch" style="margin-top:10px"><input id="qlb" type="search" placeholder="Bipe o código ou busque por descrição/SKU" autocomplete="off"><button class="btn dark" id="qlc">📷 Leitura contínua</button></div>
+  <div id="qlres" class="results" style="max-height:200px;display:none"></div>
+  ${lb?lb.html:''}
+  ${x?qlCard(x,l):''}
+  <div class="rowb" style="margin-top:14px"><b>Itens da lista</b><span class="note">toque para ver/editar</span></div>
+  <div class="results" id="qlitems" style="max-height:260px;margin-top:0">${l.skus.length?l.skus.slice().reverse().map(s=>{const it=bySku(s);return it?resRow(it,'data-qi',`${l.q[s]||0} na lista`,s===QL.last?'cur':''):''}).join(''):'<div class="empty">Comece bipando um código.</div>'}</div>
+  <div class="frm"><button class="btn" id="qlch">Trocar lista</button><button class="btn primary" id="qlend">Concluir</button></div>`;
+  if(lb)lb.bind();
+  const inp=$('#qlb');
+  const drawR=()=>{const v=inp.value.trim(),box=$('#qlres');if(!v||/^\d{8,}$/.test(v)){box.style.display='none';return}
+    const r=search(v,20);box.style.display='block';box.innerHTML=r.length?r.map(it=>resRow(it,'data-qp','+1')).join(''):'<div class="empty">Nada encontrado.</div>'};
+  const stop=bipInput(inp,t=>{navigator.vibrate?.(80);qlAdd(t)},drawR);
+  inp.onkeydown=e=>{if(e.key!=='Enter')return;e.preventDefault();stop();const v=inp.value.trim();if(!v)return;
+    const it=byCode(v);if(it){navigator.vibrate?.(80);return qlAddSku(it.sku)}
+    const r=$('#qlres').querySelectorAll('.res');if(r.length===1)return qlAddSku(r[0].dataset.qp);
+    if(/^\d{6,14}$/.test(v))qlAdd(v)};
+  $('#qlres').onclick=e=>{const b=e.target.closest('.res');if(b)qlAddSku(b.dataset.qp)};
+  $('#qlc').onclick=()=>openCam(c=>{
+    const it=qlAdd(c);
+    $('#clast').innerHTML=it?`<div class="res">${thumb(it.sku)}<span class="nm">${esc(it.name)}<br><span class="sk mono">${esc(it.sku)} · saldo ${it.saldo}</span></span><span class="badge">${l.q[it.sku]} na lista</span></div>`
+      :`<div class="alert">Código <b class="mono">${esc(key(c))}</b> não cadastrado. Feche a câmera para vincular.</div>`;
+  },true,()=>drawQL());
+  $('#qlitems').onclick=e=>{const b=e.target.closest('.res');if(!b)return;QL.last=b.dataset.qi;QL.unk=null;QL.msg='';drawQL();$('#mbody').closest('.modal').scrollTop=0};
+  $('#qlch').onclick=()=>{QL={i:null,last:null,unk:null,msg:''};drawQL()};
+  $('#qlend').onclick=closeModal;
+  if(x){
+    const setQ=v=>{v=Math.max(0,v|0);const o=l.q[x.sku]||0;l.q[x.sku]=v;QL.msg='';save();log(x.name,`Lista "${l.name}": quantidade ${o} → ${v}.`);renderLists();drawQL()};
+    document.querySelectorAll('[data-qd]').forEach(b=>b.onclick=()=>setQ((l.q[x.sku]||0)+ +b.dataset.qd));
+    $('#qlq').onchange=e=>setQ(+e.target.value);
+    $('#qlq').onkeydown=e=>{if(e.key==='Enter')setQ(+e.target.value)};
+    $('#qlf').onchange=async e=>{const f=e.target.files[0];if(!f)return;const had=!!P[x.sku];P[x.sku]=await resize(f,600,.7);
+      if(saveP()){log(x.name,had?'Foto atualizada.':'Foto inserida.');renderResults();drawQL()}};
+    $('#qlo').onclick=()=>openItem(x.sku);
+    $('#qlr').onclick=()=>{if(!confirm('Remover este item da lista?'))return;l.skus=l.skus.filter(s=>s!==x.sku);delete l.q[x.sku];QL.last=null;QL.msg='';save();log(x.name,`Removido da lista "${l.name}".`);renderLists();renderSheets();drawQL()};
+  }
+  if(!qr&&!QL.unk)setTimeout(()=>$('#qlb')?.focus(),50);
+}
+
+/* ===== CONTAGEM RÁPIDA ===== */
+const newQ=()=>({foto:null,sku:null,code:'',desc:'',qtd:1,msg:''});
+$('#bquick').onclick=()=>{Q=newQ();drawQuick();$('#mbg').classList.add('open')};
+function drawQuick(){
+  const x=Q.sku?bySku(Q.sku):null;
+  $('#mbody').innerHTML=`<h2>⚡ Contagem rápida</h2><div class="note">${S.quick.length} registros nesta contagem</div>
+  ${Q.msg?`<div class="ok">${esc(Q.msg)}</div>`:''}
+  <div class="step"><b>1. Foto</b>${Q.foto?`<img class="big" src="${Q.foto}" alt="">`:''}
+    <div class="frm"><label class="btn dark" for="qf">${Q.foto?'Trocar foto':'📷 Tirar foto'}</label><input id="qf" type="file" accept="image/*" capture="environment">${Q.foto?'<button class="btn small" id="qfx">Remover</button>':''}</div></div>
+  <div class="step"><b>2. Produto</b>
+    ${x?`<div class="res" style="border:0">${thumb(x.sku)}<span class="nm">${esc(x.name)}<br><span class="sk mono">SKU ${esc(x.sku)} · EAN ${esc(codesOf(x)[0]||'—')} · saldo ${x.saldo}</span></span><button class="btn small" id="qx">Trocar</button></div>`
+    :`${Q.code?`<div class="alert">Código <b class="mono">${esc(Q.code)}</b> não cadastrado. Escolha o produto abaixo para vincular, ou descreva.</div>`:''}
+    <div class="srch" style="margin-top:8px"><input id="qb" type="search" placeholder="Bipe ou digite código, SKU ou descrição" autocomplete="off"><button class="btn dark" id="qc">📷 Ler código</button></div>
+    <div id="qr" class="results" style="max-height:200px"></div>
+    <input id="qd" type="text" placeholder="Ou descreva (produto sem cadastro)" style="width:100%;margin-top:8px" value="${esc(Q.desc)}">`}
+  </div>
+  <div class="step"><b>3. Quantos são?</b>
+    <div class="frm"><button class="btn" data-d="-1">−1</button><input id="qq" type="number" min="0" step="1" value="${Q.qtd}"><button class="btn" data-d="1">+1</button><button class="btn" data-d="10">+10</button></div></div>
+  <div class="frm"><button class="btn primary" id="qs">✔ Salvar e próxima</button><button class="btn" id="qe">Encerrar</button></div>`;
+  $('#qf').onchange=async e=>{const f=e.target.files[0];if(!f)return;Q.foto=await resize(f,500,.6);Q.msg='';drawQuick()};
+  if($('#qfx'))$('#qfx').onclick=()=>{Q.foto=null;drawQuick()};
+  if($('#qx'))$('#qx').onclick=()=>{Q.sku=null;Q.code='';drawQuick()};
+  const pick=sku=>{Q.sku=sku;if(Q.code&&!byCode(Q.code)){S.ean[Q.code]=sku;save();log(bySku(sku).name,`Código de barras ${Q.code} vinculado.`)}Q.code='';drawQuick()};
+  if($('#qb')){
+    const drawR=()=>{const v=$('#qb').value.trim();const r=v?search(v,20):[];$('#qr').innerHTML=v?(r.length?r.map(x=>resRow(x,'data-qs','Escolher')).join(''):'<div class="empty">Nada encontrado.</div>'):''};
+    const stop=bipInput($('#qb'),t=>{const x=byCode(t);if(x)pick(x.sku);else{Q.code=key(t);drawQuick()}},drawR);
+    $('#qb').onkeydown=e=>{if(e.key!=='Enter')return;e.preventDefault();stop();const v=$('#qb').value.trim();const x=byCode(v);
+      if(x)return pick(x.sku);const r=$('#qr').querySelectorAll('.res');if(r.length===1)return pick(r[0].dataset.qs);
+      if(/^\d{8,14}$/.test(v)){Q.code=key(v);drawQuick()}};
+    $('#qr').onclick=e=>{const b=e.target.closest('.res');if(b)pick(b.dataset.qs)};
+    $('#qc').onclick=()=>openCam(c=>{const x=byCode(c);if(x)pick(x.sku);else{Q.code=key(c);drawQuick()}});
+    $('#qd').oninput=e=>Q.desc=e.target.value;
+    setTimeout(()=>$('#qb')?.focus(),50);
+  }
+  $('#qq').oninput=e=>Q.qtd=+e.target.value;
+  document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{Q.qtd=Math.max(0,(+$('#qq').value||0)+ +b.dataset.d);$('#qq').value=Q.qtd});
+  $('#qe').onclick=()=>$('#mbg').classList.remove('open');
+  $('#qs').onclick=()=>{
+    const q=+$('#qq').value;if(!Number.isInteger(q)||q<0)return alert('Quantidade inválida.');
+    const it=Q.sku?bySku(Q.sku):null,desc=it?it.name:Q.desc.trim();
+    if(!it&&!desc&&!Q.foto)return alert('Identifique o produto, descreva-o ou tire uma foto.');
+    const id=Date.now().toString(36);
+    const e={id,t:new Date().toLocaleString('pt-BR'),sku:it?it.sku:'',ean:it?(codesOf(it)[0]||''):Q.code,desc:desc||'(sem descrição)',qtd:q,ok:false};
+    if(Q.foto){PQ[id]=Q.foto;if(!saveQ()){delete PQ[id];return}
+      if(it&&!P[it.sku]){P[it.sku]=Q.foto;saveP()}}
+    S.quick.unshift(e);save();log(e.desc,`Contagem rápida: ${q} un.`);
+    Q=newQ();Q.msg=`Salvo: ${e.desc} · ${q} un.`;renderQuick();renderResults();drawQuick();
+  };
+}
+function renderQuick(){
+  const L=S.quick;
+  $('#quick').innerHTML=(L.length?`<div class="rowb"><span class="note">${L.length} registros · ${L.reduce((s,e)=>s+e.qtd,0)} un.</span><span><button class="btn small primary" id="qall">Aplicar ao estoque</button> <button class="btn small" id="qclr">Limpar</button></span></div>
+  <div class="results" style="max-height:40vh;margin-top:0">${L.map(e=>`<button class="res" data-q="${e.id}">${PQ[e.id]?`<img class="th" src="${PQ[e.id]}" alt="">`:'<span class="th"></span>'}<span class="nm">${esc(e.desc)}<br><span class="sk mono">${esc(e.sku||'sem SKU')}${e.ean?' · '+esc(e.ean):''}</span></span><span class="badge${e.ok?'':' g'}">${e.qtd} un.${e.ok?' ✓':''}</span></button>`).join('')}</div>`
+  :'<div class="note">Toque em <b>⚡ Contagem rápida</b> na barra: foto → produto → quantidade.</div>');
+  if(!L.length)return;
+  $('#quick').querySelector('.results').onclick=ev=>{const b=ev.target.closest('.res');if(b)openQ(b.dataset.q)};
+  $('#qall').onclick=()=>{
+    const pend=L.filter(e=>e.sku&&!e.ok&&bySku(e.sku));if(!pend.length)return alert('Nada pendente com produto identificado.');
+    const sum={};pend.forEach(e=>sum[e.sku]=(sum[e.sku]||0)+e.qtd);
+    if(!confirm(`Definir o saldo de ${Object.keys(sum).length} produtos com o total contado? (registros do mesmo SKU são somados)`))return;
+    for(const s in sum){const x=bySku(s),o=x.saldo;x.saldo=sum[s];log(x.name,`Contagem rápida aplicada: tinha ${o}, agora ${x.saldo}.`)}
+    pend.forEach(e=>e.ok=true);save();renderAll();
+  };
+  $('#qclr').onclick=()=>{if(!confirm('Apagar todos os registros da contagem rápida e suas fotos?'))return;S.quick=[];PQ={};saveQ();save();renderQuick()};
+}
+function openQ(id){
+  const e=S.quick.find(q=>q.id===id);if(!e)return;const x=e.sku?bySku(e.sku):null;
+  $('#mbody').innerHTML=`<h2>${esc(e.desc)}</h2>
+  ${PQ[e.id]?`<img class="big" src="${PQ[e.id]}" alt="">`:'<div class="nophoto">Sem foto</div>'}
+  <div class="info"><b>Descrição</b><span>${esc(e.desc)}</span><b>Quantidade contada</b><span style="font-size:18px;font-weight:700">${e.qtd} un.</span>
+  <b>Código de barras</b><span class="mono">${esc(e.ean||'—')}</span><b>SKU</b><span class="mono">${esc(e.sku||'—')}</span>
+  <b>Saldo no sistema</b><span>${x?x.saldo+' un.':'—'}</span><b>Registrado em</b><span>${esc(e.t)}</span><b>Situação</b><span>${e.ok?'✓ Aplicado ao estoque':'Pendente'}</span></div>
+  <div class="frm"><span>Corrigir quantidade:</span><input id="eq" type="number" min="0" value="${e.qtd}"><button class="btn" id="es">Salvar</button></div>
+  <div class="frm">${x?`<button class="btn primary" id="ea">Saldo = ${e.qtd}</button><button class="btn" id="eadd">Somar +${e.qtd}</button><button class="btn" id="eo">Abrir produto</button>`:''}<button class="btn" id="ed" style="color:#b42318">Excluir registro</button></div>`;
+  $('#es').onclick=()=>{const v=+$('#eq').value;if(!Number.isInteger(v)||v<0)return alert('Quantidade inválida.');log(e.desc,`Contagem rápida corrigida: ${e.qtd} → ${v}.`);e.qtd=v;save();renderQuick();openQ(id)};
+  if(x){
+    $('#ea').onclick=()=>{const o=x.saldo;x.saldo=e.qtd;e.ok=true;log(x.name,`Contagem rápida aplicada: tinha ${o}, agora ${x.saldo}.`);save();renderAll();openQ(id)};
+    $('#eadd').onclick=()=>{const o=x.saldo;x.saldo+=e.qtd;e.ok=true;log(x.name,`Contagem rápida somada +${e.qtd}: tinha ${o}, agora ${x.saldo}.`);save();renderAll();openQ(id)};
+    $('#eo').onclick=()=>openItem(x.sku);
+  }
+  $('#ed').onclick=()=>{if(!confirm('Excluir este registro?'))return;S.quick=S.quick.filter(q=>q.id!==id);delete PQ[id];saveQ();save();renderQuick();closeModal()};
+  $('#mbg').classList.add('open');
+}
+
+/* ===== Modal do item ===== */
+function openItem(sku){cur=bySku(sku);if(!cur)return;act=null;$('#mbody').onchange=$('#mbody').onclick=null;drawModal();$('#mbg').classList.add('open')}
+function closeModal(){$('#mbg').classList.remove('open');QL=null;$('#mbody').onchange=$('#mbody').onclick=null;if($('#leitura').classList.contains('on'))$('#busca').focus()}
+$('#mclose').onclick=closeModal;
+$('#mbg').onclick=e=>{if(e.target.id==='mbg')closeModal()};
+function drawModal(){
+  const x=cur,ph=P[x.sku],cs=codesOf(x),ls=S.lists.filter(l=>l.skus.includes(x.sku)).map(l=>`${l.name} (${l.q[x.sku]||0})`);
+  $('#mbody').innerHTML=`<h2>${esc(x.name)}</h2>
+  ${ph?`<img class="big" src="${ph}" alt="">`:'<div class="nophoto">Sem foto cadastrada</div>'}
+  <div class="info"><b>Descrição</b><span>${esc(x.name)}</span><b>Quantidade</b><span style="font-size:18px;font-weight:700">${x.saldo} un.</span>
+  <b>Código de barras</b><span>${cs.length?cs.map(c=>`<span class="code mono">${esc(c)}</span>`).join(''):'—'}</span><b>SKU</b><span class="mono">${esc(x.sku)}</span>
+  <b>Listas</b><span>${ls.length?ls.map(esc).join(', '):'—'}</span></div>
+  ${QL&&QL.i!==null?'<div class="frm"><button class="btn blue" id="backql">← Voltar à lista rápida</button></div>':''}
+  <p><b>O que você quer registrar?</b></p>
+  <div class="actions">${[['foto','📷 Foto'],['inv','📋 Inventário'],['add','➕ Quantidade adicional'],['lista','🗂️ Incluir em lista'],['cod','🏷️ Código de barras']].map(([k,l])=>`<button class="action${act===k?' sel':''}" data-act="${k}">${l}</button>`).join('')}</div>
+  <div id="mform"></div>`;
+  if($('#backql'))$('#backql').onclick=drawQL;
+  document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{act=b.dataset.act;drawModal()});
+  drawForm();
+}
+function done(msg){log(cur.name,msg);save();renderAll();drawModal()}
+function drawForm(){
+  const f=$('#mform'),x=cur;
+  if(act==='foto'){
+    f.innerHTML=`<div class="frm"><label class="btn primary" for="fph">${P[x.sku]?'Substituir foto':'Tirar / escolher foto'}</label><input id="fph" type="file" accept="image/*" capture="environment"></div>`;
+    $('#fph').onchange=async e=>{const fl=e.target.files[0];if(!fl)return;const had=!!P[x.sku];
+      P[x.sku]=await resize(fl,600,.7);if(saveP())done(had?'Foto atualizada.':'Foto inserida.')};
+  }else if(act==='inv'){
+    f.innerHTML=`<div class="frm"><span>Contei:</span><input id="q" type="number" min="0" step="1" value="${x.saldo}"><button class="btn primary" id="ok">Atualizar inventário</button></div>`;
+    $('#q').select();
+    $('#ok').onclick=()=>{const v=+$('#q').value;if(!Number.isInteger(v)||v<0)return alert('Quantidade inválida.');const o=x.saldo;x.saldo=v;done(`Inventário atualizado: tinha ${o}, agora ${v}.`)};
+  }else if(act==='add'){
+    f.innerHTML=`<div class="frm"><span>Somar:</span><input id="q" type="number" min="1" step="1" value="1"><button class="btn primary" id="ok">Adicionar</button></div>`;
+    $('#q').select();
+    $('#ok').onclick=()=>{const v=+$('#q').value;if(!Number.isInteger(v)||v<1)return alert('Quantidade inválida.');const o=x.saldo;x.saldo+=v;done(`Quantidade adicional +${v}: tinha ${o}, agora ${x.saldo}.`)};
+  }else if(act==='lista'){
+    f.innerHTML=`<div class="frm">${S.lists.length?`<select id="ls">${S.lists.map((l,i)=>`<option value="${i}">${esc(l.name)}${l.skus.includes(x.sku)?' ✓':''}</option>`).join('')}</select><input id="lq" type="number" min="1" value="1" style="width:80px"><button class="btn primary" id="ok">Incluir</button>`:''}</div>
+    <div class="frm"><input id="nl" type="text" placeholder="Nova lista (ex.: Repor fornecedor)"><button class="btn" id="cr">Criar e incluir</button></div>`;
+    const add=i=>{const l=S.lists[i],n=Math.max(1,+($('#lq')?.value||1)|0);if(!l.skus.includes(x.sku))l.skus.push(x.sku);l.q[x.sku]=(l.q[x.sku]||0)+n;renderLists();done(`Lista "${l.name}": +${n} (total ${l.q[x.sku]}).`)};
+    if($('#ok'))$('#ok').onclick=()=>add(+$('#ls').value);
+    $('#cr').onclick=()=>{const n=$('#nl').value.trim();if(!n)return;add(newList(n))};
+  }else if(act==='cod'){
+    const vinc=Object.keys(S.ean).filter(k=>S.ean[k]===x.sku);
+    f.innerHTML=`<div class="frm"><input id="nc" type="text" inputmode="numeric" placeholder="Digite ou bipe o código"><button class="btn primary" id="okc">Vincular</button><button class="btn dark" id="camc">📷</button></div>
+    ${vinc.length?`<div class="frm">${vinc.map(c=>`<span class="code mono">${esc(c)} <button class="btn small" data-uc="${esc(c)}">Remover</button></span>`).join('')}</div>`:''}`;
+    $('#nc').focus();
+    const link=c=>{c=key(c);if(!c)return;const o=byCode(c);
+      if(o&&o.sku!==x.sku&&!confirm(`Este código já está em "${o.name}". Mover para este produto?`))return;
+      S.ean[c]=x.sku;done(`Código de barras ${c} vinculado.`)};
+    $('#okc').onclick=()=>link($('#nc').value);$('#nc').onkeydown=e=>{if(e.key==='Enter')link($('#nc').value)};
+    $('#camc').onclick=()=>openCam(link);
+    f.querySelectorAll('[data-uc]').forEach(b=>b.onclick=()=>{delete S.ean[b.dataset.uc];done(`Código de barras ${b.dataset.uc} removido.`)});
+  }else f.innerHTML='';
+}
+function resize(file,max,q){return new Promise((ok,err)=>{const i=new Image();i.onload=()=>{const s=Math.min(1,max/Math.max(i.width,i.height));const c=document.createElement('canvas');c.width=Math.round(i.width*s);c.height=Math.round(i.height*s);c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(i.src);ok(c.toDataURL('image/jpeg',q))};i.onerror=err;i.src=URL.createObjectURL(file)})}
+
+/* ===== LEITURA ÓPTICA LOCAL DO FORMULÁRIO PADRÃO ===== */
+function renderScanPg(){
+  const n=Math.ceil(setItems().length/ROWS),v=$('#scan-pg').value;
+  $('#scan-pg').innerHTML='<option value="0">Automático</option>'+Array.from({length:n},(_,i)=>`<option value="${i+1}">${String(i+1).padStart(2,'0')}</option>`).join('');
+  if([...$('#scan-pg').options].some(o=>o.value===v))$('#scan-pg').value=v;
+  $('#scan-set').textContent=setName();
+}
+function solve(A,b){const n=b.length;for(let i=0;i<n;i++){let m=i;for(let r=i+1;r<n;r++)if(Math.abs(A[r][i])>Math.abs(A[m][i]))m=r;[A[i],A[m]]=[A[m],A[i]];[b[i],b[m]]=[b[m],b[i]];
+  for(let r=i+1;r<n;r++){const f=A[r][i]/A[i][i];for(let c=i;c<n;c++)A[r][c]-=f*A[i][c];b[r]-=f*b[i]}}
+  const x=Array(n);for(let i=n-1;i>=0;i--){let s=b[i];for(let c=i+1;c<n;c++)s-=A[i][c]*x[c];x[i]=s/A[i][i]}return x}
+function homog(src,dst){const A=[],b=[];src.forEach(([x,y],i)=>{const u=dst[i].x,v=dst[i].y;A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v)});return solve(A,b)}
+const mapP=(h,x,y)=>{const w=h[6]*x+h[7]*y+1;return[(h[0]*x+h[1]*y+h[2])/w,(h[3]*x+h[4]*y+h[5])/w]};
+const loadImg=f=>new Promise((ok,err)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=err;i.src=URL.createObjectURL(f)});
+
+function analyze(img,forced){
+  const s=Math.min(1,1800/Math.max(img.width,img.height)),W=Math.round(img.width*s),H=Math.round(img.height*s);
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d');cx.drawImage(img,0,0,W,H);
+  const px=cx.getImageData(0,0,W,H).data,N=W*H,gray=new Uint8Array(N);
+  for(let i=0;i<N;i++)gray[i]=(px[i*4]*299+px[i*4+1]*587+px[i*4+2]*114)/1000;
+  const W1=W+1,I=new Float64Array(W1*(H+1));
+  for(let y=0;y<H;y++){let r=0;for(let x=0;x<W;x++){r+=gray[y*W+x];I[(y+1)*W1+x+1]=I[y*W1+x+1]+r}}
+  const R=Math.round(Math.max(W,H)/50),bin=new Uint8Array(N);
+  for(let y=0;y<H;y++){const y1=Math.max(0,y-R),y2=Math.min(H-1,y+R);for(let x=0;x<W;x++){const x1=Math.max(0,x-R),x2=Math.min(W-1,x+R);
+    const c=(x2-x1+1)*(y2-y1+1),sm=I[(y2+1)*W1+x2+1]-I[y1*W1+x2+1]-I[(y2+1)*W1+x1]+I[y1*W1+x1];
+    bin[y*W+x]=gray[y*W+x]*c<sm*0.82?1:0}}
+  const lab=new Int32Array(N),st=new Int32Array(N),cand=[];let id=0;
+  const minA=N*0.00003,maxA=N*0.01;
+  for(let p=0;p<N;p++){if(!bin[p]||lab[p])continue;id++;let sp=0;st[sp++]=p;lab[p]=id;
+    let c=0,sx=0,sy=0,x0=W,x1=0,y0=H,y1=0;
+    while(sp){const q=st[--sp],x=q%W,y=(q/W)|0;c++;sx+=x;sy+=y;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+      if(x>0&&bin[q-1]&&!lab[q-1]){lab[q-1]=id;st[sp++]=q-1}
+      if(x<W-1&&bin[q+1]&&!lab[q+1]){lab[q+1]=id;st[sp++]=q+1}
+      if(y>0&&bin[q-W]&&!lab[q-W]){lab[q-W]=id;st[sp++]=q-W}
+      if(y<H-1&&bin[q+W]&&!lab[q+W]){lab[q+W]=id;st[sp++]=q+W}}
+    const bw=x1-x0+1,bh=y1-y0+1,ar=bw/bh;
+    if(c>=minA&&c<=maxA&&c/(bw*bh)>0.72&&ar>0.6&&ar<1.65)cand.push({x:sx/c,y:sy/c,a:c})}
+  if(cand.length<4)throw new Error('Não encontrei os 4 quadrados pretos dos cantos.');
+  const fns=[p=>-(p.x+p.y),p=>p.x-p.y,p=>p.x+p.y,p=>p.y-p.x];
+  const c4=fns.map(f=>cand.reduce((b,p)=>f(p)>f(b)?p:b));
+  if(new Set(c4).size<4)throw new Error('Cantos não identificados. Enquadre a folha inteira.');
+  const iM=c4.reduce((m,p,i)=>p.a>c4[m].a?i:m,0);
+  const ord=c4.slice(iM).concat(c4.slice(0,iM));
+  const h=homog(G.marks,ord);
+  const frac=(x0,y0,w,hh,n=7)=>{let k=0;for(let a=0;a<n;a++)for(let b=0;b<n;b++){const[u,v]=mapP(h,x0+w*(a+.5)/n,y0+hh*(b+.5)/n);const X=Math.round(u),Y=Math.round(v);if(X>=0&&Y>=0&&X<W&&Y<H&&bin[Y*W+X])k++}return k/(n*n)};
+  let pg=0;for(let b=0;b<8;b++)if(frac(G.bitX(b)+.6,G.bitY+.6,G.BIT-1.2,G.BIT-1.2)>.5)pg|=1<<b;
+  const its=setItems(),pages=Math.ceil(its.length/ROWS);
+  const page=forced||pg;
+  if(page<1||page>pages)throw new Error(`Folha não identificada (código lido: ${pg}). Escolha a folha manualmente.`);
+  const rows=its.slice((page-1)*ROWS,page*ROWS),IN=.75,SZ=G.BOX-2*IN;
+  const sc=rows.map((_,i)=>{const y=G.rowTop(i)+1.5+IN;return[0,1,2,3,4].map(k=>(k<4?[1,2,3,4,5,6,7,8,9]:[0]).map(d=>({d,v:frac(G.boxX(k,d)+IN,y,SZ,SZ)})))});
+  const all=sc.flat(2).map(o=>o.v).sort((a,b)=>a-b),base=all[Math.floor(all.length/2)];
+  const thr=Math.max(base+.12,base*2,.12);
+  const itens=[];
+  cx.lineWidth=Math.max(2,W/500);
+  ord.forEach((p,i)=>{cx.strokeStyle=i?'#e11':'#00f';cx.beginPath();cx.arc(p.x,p.y,W/60,0,7);cx.stroke()});
+  rows.forEach((it,i)=>{
+    let dig=[0,0,0,0],any=false,duv=false,zero=false;
+    sc[i].forEach((grp,k)=>{const m=grp.filter(o=>o.v>thr).sort((a,b)=>b.v-a.v);if(!m.length)return;any=true;if(m.length>1)duv=true;
+      if(k===4)zero=true;else dig[k]=m[0].d;
+      m.forEach((o,j)=>{const[u,v]=mapP(h,G.boxX(k,o.d)+G.BOX/2,G.rowTop(i)+1.5+G.BOX/2);cx.strokeStyle=j?'#f90':'#0c5';cx.beginPath();cx.arc(u,v,W/180,0,7);cx.stroke()})});
+    if(!any)return;
+    const q=dig[0]*1000+dig[1]*100+dig[2]*10+dig[3];
+    if(zero&&q)duv=true;
+    itens.push({linha:(page-1)*ROWS+i+1,sku:it.sku,qtd:zero&&!q?0:q,duvida:duv});
+  });
+  return{page,pages,itens,preview:cv.toDataURL('image/jpeg',.8)};
+}
+function runScan(){
+  if(!lastImg)return;
+  window.scrollTo(0,0);
+  $('#scan-st').textContent='⏳ Lendo a folha...';scan=[];renderScan();
+  setTimeout(()=>{try{
+    const r=analyze(lastImg,+$('#scan-pg').value);
+    $('#scan-prev').src=r.preview;$('#scan-prev').hidden=false;
+    scan=r.itens;
+    $('#scan-st').innerHTML=`✅ Folha <b>${String(r.page).padStart(2,'0')}/${String(r.pages).padStart(2,'0')}</b> · ${r.itens.length} linhas preenchidas (linhas em branco ignoradas). Verde = marca lida, laranja = marca duplicada.`;
+    renderScan();
+  }catch(e){$('#scan-st').textContent='❌ '+e.message;$('#scan-prev').hidden=true}},30);
+}
+$('#scan').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;lastImg=await loadImg(f);runScan()};
+$('#scan-pg').onchange=runScan;
+function renderScan(){
+  if(!scan.length){$('#scan-res').innerHTML='';return}
+  $('#scan-res').innerHTML=`<div class="rowb"><b>${scan.length} itens lidos</b><button class="btn primary" id="okall">✔ Confirmar tudo</button></div>`+scan.map((r,i)=>{const x=bySku(r.sku);
+    return`<div class="scan-line${!x?' bad':r.duvida?' warn':''}"><div><b>#${r.linha} ${x?esc(x.name):'SKU não encontrado'}</b><div class="note mono">${esc(r.sku)}${r.duvida?' · ⚠️ conferir':''}</div></div><div class="note">Tinha: <b>${x?x.saldo:'—'}</b></div><input type="number" min="0" value="${r.qtd}" data-sq="${i}"><button class="btn small primary" data-ok="${i}" ${x?'':'disabled'}>Confirmar</button><button class="btn small" data-del="${i}">✕</button></div>`}).join('');
+  document.querySelectorAll('[data-sq]').forEach(el=>el.oninput=()=>scan[+el.dataset.sq].qtd=+el.value);
+  document.querySelectorAll('[data-ok]').forEach(el=>el.onclick=()=>{confirmScan(+el.dataset.ok);renderScan()});
+  document.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{scan.splice(+el.dataset.del,1);renderScan()});
+  $('#okall').onclick=()=>{for(let i=scan.length-1;i>=0;i--)if(bySku(scan[i].sku))confirmScan(i);renderScan()};
+}
+function confirmScan(i){
+  const r=scan[i],x=bySku(r.sku);if(!x||!Number.isInteger(r.qtd)||r.qtd<0)return;
+  const o=x.saldo;x.saldo=r.qtd;log(x.name,`Contagem da folha: tinha ${o}, agora ${r.qtd}.`);scan.splice(i,1);save();renderResults();
+}
+
+/* ===== ESCOLHA DO TIPO DE FOTO ===== */
+$('#bfoto').onclick=()=>{
+  $('#mbody').innerHTML=`<h2>📸 O que você vai fotografar?</h2>
+  <div class="actions" style="margin-top:12px">
+    <button class="action" id="fpad">📋 Formulário padrão<br><span class="note">milhar · centena · dezena · unidade</span></button>
+    <button class="action" id="fhw">✍️ Página escrita à mão<br><span class="note">1 item por linha + quantidade</span></button>
+  </div>
+  <div class="alert">Página à mão: use <b>letra de forma</b>, um produto por linha e a quantidade no fim (ex.: <span class="mono">9PM ELIXIR 100ML 12</span>). Também aceita o código de barras ou o SKU no lugar do nome.</div>`;
+  $('#fpad').onclick=()=>{closeModal();$('#scan').click()};
+  $('#fhw').onclick=()=>{closeModal();$('#hw').click()};
+  $('#mbg').classList.add('open');
+};
+
+/* ===== LEITURA DE PÁGINA MANUSCRITA ===== */
+let HW=[],HWprev='',TRI=null;
+const tri=s=>{const t='  '+norm(s).replace(/[^a-z0-9]+/g,' ').trim()+' ',g=new Set();for(let i=0;i<t.length-2;i++)g.add(t.slice(i,i+3));return g};
+const dice=(a,b)=>{let n=0;a.forEach(x=>{if(b.has(x))n++});return 2*n/((a.size+b.size)||1)};
+function cands(txt){
+  if(!TRI||TRI.n!==S.items.length)TRI={n:S.items.length,m:S.items.map(x=>({x,t:tri(x.name+' '+x.sku),nm:norm(x.name+' '+x.sku)}))};
+  const k=key(txt),qt=tri(txt),ws=norm(txt).split(/[^a-z0-9]+/).filter(w=>w.length>2);
+  return TRI.m.map(o=>{let s=dice(qt,o.t);
+    if(ws.length)s+=.4*ws.filter(w=>o.nm.includes(w)).length/ws.length;
+    if(k&&(codesOf(o.x).includes(k)||key(o.x.sku)===k))s+=2;
+    return{sku:o.x.sku,s}}).sort((a,b)=>b.s-a.s).slice(0,5);
+}
+const fixN=s=>s.replace(/[oO]/g,'0').replace(/[lIi|]/g,'1').replace(/[sS]/g,'5');
+function parseLine(l){
+  l=l.replace(/\s+/g,' ').trim();
+  if(/^\d{8,14}$/.test(l.replace(/\s/g,'')))return{txt:l.replace(/\s/g,''),qtd:1};
+  let m=l.match(/^(.*?[a-z].*?)[\s\-:=x]+([0-9oOlIS]{1,4})\s*(un|unid|pc|pcs|x)?\.?$/i);
+  if(m&&/\d/.test(m[2]))return{txt:m[1].trim(),qtd:+fixN(m[2])};
+  m=l.match(/^([0-9oOlIS]{1,4})\s*(x|un|-|:)?\s+(.+)$/i);
+  if(m&&/\d/.test(m[1]))return{txt:m[3].trim(),qtd:+fixN(m[1])};
+  return{txt:l,qtd:1};
+}
+const hwRow=t=>{const p=parseLine(t),c=cands(p.txt);return{...p,c,pick:c[0]&&c[0].s>.35?c[0].sku:''}};
+function prepImg(img){
+  const s=Math.min(1,2000/Math.max(img.width,img.height)),c=document.createElement('canvas');
+  c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+  const x=c.getContext('2d');x.drawImage(img,0,0,c.width,c.height);
+  const d=x.getImageData(0,0,c.width,c.height),p=d.data;let mn=255,mx=0;
+  for(let i=0;i<p.length;i+=4){const g=(p[i]*299+p[i+1]*587+p[i+2]*114)/1000;p[i]=g;if(g<mn)mn=g;if(g>mx)mx=g}
+  const r=255/((mx-mn)||1);
+  for(let i=0;i<p.length;i+=4){const g=Math.min(255,Math.max(0,(p[i]-mn)*r*1.1));p[i]=p[i+1]=p[i+2]=g}
+  x.putImageData(d,0,0);return c;
+}
+$('#hw').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(!S.items.length)return alert('Importe a planilha de estoque primeiro.');
+  if(typeof Tesseract==='undefined')return alert('Leitor de texto não carregou. Verifique a internet.');
+  $('#mbody').innerHTML='<h2>✍️ Lendo a página...</h2><p class="note" id="hwst">Preparando imagem...</p>';
+  $('#mbg').classList.add('open');
+  try{
+    const cv=prepImg(await loadImg(f));HWprev=cv.toDataURL('image/jpeg',.6);
+    const r=await Tesseract.recognize(cv,'por',{logger:m=>{const el=$('#hwst');if(el&&m.status)el.textContent=`${m.status} ${m.progress?Math.round(m.progress*100)+'%':''}`}});
+    HW=r.data.text.split('\n').map(s=>s.trim()).filter(s=>s.replace(/[^a-z0-9]/gi,'').length>=2).map(hwRow);
+    if(!HW.length)HW=[hwRow('')];
+    drawHW();
+  }catch(err){$('#mbody').innerHTML=`<h2>❌ Não consegui ler</h2><p class="note">${esc(err.message||err)}</p>`}
+};
+function drawHW(){
+  const ok=HW.filter(r=>r.pick).length;
+  $('#mbody').innerHTML=`<h2>✍️ Página escrita à mão</h2>
+  <div class="note">${HW.length} linhas lidas · ${ok} com produto escolhido. Corrija o texto se a leitura errou: as 5 opções são recalculadas.</div>
+  <details style="margin:8px 0"><summary class="note">Ver foto</summary><img class="big" src="${HWprev}" alt=""></details>
+  ${HW.map((r,i)=>`<div class="step"${r.pick?' style="border-color:#10a36f"':''}>
+    <div class="frm" style="margin-top:0"><b>${i+1}.</b><input type="text" data-ht="${i}" value="${esc(r.txt)}" style="flex:1;min-width:140px"><input type="number" min="0" data-hq="${i}" value="${r.qtd}" style="width:80px"><button class="btn small" data-hx="${i}">✕</button></div>
+    <div class="results" style="max-height:none">${r.c.map(o=>{const x=bySku(o.sku);return`<label class="res${r.pick===o.sku?' cur':''}"><input type="radio" name="hp${i}" data-hp="${i}" value="${esc(o.sku)}" ${r.pick===o.sku?'checked':''}>${thumb(o.sku)}<span class="nm">${esc(x.name)}<br><span class="sk mono">${esc(x.sku)}${codesOf(x)[0]?' · '+esc(codesOf(x)[0]):''} · saldo ${x.saldo}</span></span><span class="badge${o.s>.35?'':' g'}">${Math.min(99,Math.round(o.s*100))}%</span></label>`}).join('')}
+    <label class="res"><input type="radio" name="hp${i}" data-hp="${i}" value="" ${r.pick?'':'checked'}><span class="nm note">Nenhum: ignorar esta linha</span></label></div></div>`).join('')}
+  <div class="frm"><button class="btn" id="hwadd">+ Linha</button></div>
+  <div class="step"><b>Gerar lista</b>
+    <div class="frm"><select id="hwl"><option value="new">Nova lista</option>${S.lists.map((l,i)=>`<option value="${i}">Somar em: ${esc(l.name)}</option>`).join('')}</select>
+    <input id="hwn" type="text" style="flex:1" value="Manuscrita ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}"></div>
+    <div class="frm"><button class="btn primary" id="hwok" ${ok?'':'disabled'}>✔ Gerar lista com ${ok} itens</button></div></div>`;
+  const mb=$('#mbody');
+  mb.onchange=e=>{const d=e.target.dataset;
+    if(d.ht!==undefined){const r=HW[+d.ht];r.txt=e.target.value;r.c=cands(r.txt);r.pick=r.c[0]&&r.c[0].s>.35?r.c[0].sku:'';drawHW()}
+    else if(d.hp!==undefined){HW[+d.hp].pick=e.target.value;drawHW()}
+    else if(d.hq!==undefined)HW[+d.hq].qtd=Math.max(0,+e.target.value|0)};
+  mb.onclick=e=>{const d=e.target.dataset;if(d.hx!==undefined){HW.splice(+d.hx,1);drawHW()}};
+  $('#hwl').onchange=e=>$('#hwn').style.display=e.target.value==='new'?'':'none';
+  $('#hwadd').onclick=()=>{HW.push(hwRow(''));drawHW()};
+  $('#hwok').onclick=()=>{
+    const v=$('#hwl').value,i=v==='new'?newList($('#hwn').value.trim()||'Manuscrita'):+v,l=S.lists[i];
+    let n=0;HW.filter(r=>r.pick).forEach(r=>{if(!l.skus.includes(r.pick))l.skus.push(r.pick);l.q[r.pick]=(l.q[r.pick]||0)+r.qtd;n++});
+    save();log('Sistema',`Página manuscrita lida: ${n} itens na lista "${l.name}".`);
+    mb.onchange=mb.onclick=null;HW=[];renderLists();renderSheets();
+    QL={i,last:null,unk:null,msg:`${n} itens importados da página manuscrita.`};drawQL();
+  };
+}
+
+/* ===== Impressão da aba LEITURA ===== */
+$('#pr-leitura').onclick=()=>{
+  $('#relatorio').innerHTML=`<h1 style="font-size:16pt">Registro de estoque · ${new Date().toLocaleString('pt-BR')}</h1>
+  ${S.lists.map(l=>`<h2>Lista: ${esc(l.name)}</h2><table><tr><th>Descrição</th><th>Código de barras</th><th>SKU</th><th>Qtd na lista</th><th>Saldo sistema</th></tr>${l.skus.map(s=>{const x=bySku(s);return`<tr><td>${esc(x?.name)}</td><td>${x?esc(codesOf(x).join(', ')):''}</td><td>${esc(s)}</td><td><b>${l.q[s]||0}</b></td><td>${x?.saldo??''}</td></tr>`}).join('')}</table>`).join('')}
+  ${S.quick.length?`<h2>Contagem rápida</h2><table><tr><th>Data/hora</th><th>Descrição</th><th>Código de barras</th><th>SKU</th><th>Qtd</th><th>Situação</th></tr>${S.quick.map(e=>`<tr><td>${esc(e.t)}</td><td>${esc(e.desc)}</td><td>${esc(e.ean)}</td><td>${esc(e.sku)}</td><td>${e.qtd}</td><td>${e.ok?'Aplicado':'Pendente'}</td></tr>`).join('')}</table>`:''}
+  <h2>Histórico</h2><table><tr><th>Data/hora</th><th>Produto</th><th>Ação</th></tr>${S.logs.map(l=>`<tr><td>${esc(l.t)}</td><td>${esc(l.name)}</td><td>${esc(l.msg)}</td></tr>`).join('')}</table>`;
+  document.body.dataset.print='leitura';window.print();
+};
+
+/* ===== Abas e init ===== */
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+  const t=b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id===t));
+  document.querySelectorAll('.bar').forEach(x=>x.classList.toggle('on',x.dataset.for===t));
+  window.scrollTo(0,0);
+  if(t==='leitura')$('#busca').focus();
+});
+function renderAll(){$('#count').textContent=S.items.length?`${S.items.length} itens`:'Nenhum item importado';renderLists();renderSheets();renderResults();renderLog();renderQuick()}
+renderAll();
+</script>
+</body>
+</html>
