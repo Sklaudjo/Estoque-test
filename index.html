@@ -7,6 +7,7 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef1f5;color:#1b2533}
@@ -26,7 +27,7 @@ button,input,select{font:inherit}button{cursor:pointer}
 .btn.primary{background:#10b981;color:#04130d}.btn.dark{background:#142b45;color:#fff}.btn.warn{background:#f59e0b;color:#1f1300}.btn.blue{background:#2563eb;color:#fff}
 .btn.small{padding:6px 10px;min-height:32px;font-size:12px}.btn:disabled{opacity:.4;cursor:not-allowed}
 input[type=file]{display:none}
-input[type=search],input[type=text],input[type=number],select{border:1px solid #c8d2dc;border-radius:8px;padding:9px 11px;min-height:42px;background:#fff}
+input[type=search],input[type=text],input[type=number],input[type=email],input[type=password],select{border:1px solid #c8d2dc;border-radius:8px;padding:9px 11px;min-height:42px;background:#fff}
 .note{font-size:12px;color:#66768a}.mono{font-family:"Courier New",monospace;font-weight:700}
 .empty{padding:30px;text-align:center;color:#738194}
 .card{background:#fff;border:1px solid #e0e6ed;border-radius:10px;padding:14px}.card h2{font-size:16px;margin:0 0 10px}
@@ -52,6 +53,7 @@ input[type=search],input[type=text],input[type=number],select{border:1px solid #
 .rowb{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap}
 .mbg{display:none;position:fixed;inset:0;background:#14202dc0;z-index:20;align-items:center;justify-content:center;padding:14px}.mbg.open{display:flex}
 #cbg{z-index:30}
+#auth{z-index:200;background:#142b45}
 .modal{background:#fff;width:min(600px,100%);max-height:92vh;overflow:auto;border-radius:14px;padding:18px;position:relative}
 .modal h2{font-size:17px;margin:0 30px 4px 0}
 .x{position:absolute;right:12px;top:12px;border:0;background:#eef2f6;border-radius:8px;padding:6px 10px}
@@ -97,12 +99,27 @@ input[type=search],input[type=text],input[type=number],select{border:1px solid #
 </style>
 </head>
 <body>
+
+<!-- ===== LOGIN (bloqueia o app inteiro) ===== -->
+<div id="auth" class="mbg open"><div class="modal" style="width:min(400px,100%)">
+  <h2>🔐 Controle de Estoque</h2>
+  <p class="note">Entre para acessar os dados compartilhados.</p>
+  <input id="aE" type="email" placeholder="E-mail" style="width:100%;margin-top:8px" autocomplete="username">
+  <input id="aP" type="password" placeholder="Senha (mín. 6)" style="width:100%;margin-top:8px" autocomplete="current-password">
+  <div class="frm"><button class="btn primary" id="aI">Entrar</button><button class="btn" id="aC">Criar conta</button></div>
+  <p class="note" id="aM"></p>
+</div></div>
+
 <div class="fixo">
   <header class="top">
     <h1>Controle de Estoque</h1>
     <span class="note" id="count"></span>
+    <span class="note" id="sync"></span>
     <button class="btn primary" id="bimp">📥 Importar planilha</button>
     <input id="imp" type="file" accept=".xlsx,.xls,.csv">
+    <span class="note" id="uemail"></span>
+    <button class="btn small" id="bref" title="Recarregar dados">↻</button>
+    <button class="btn small" id="bout">Sair</button>
   </header>
   <nav class="tabs">
     <button class="tab on" data-tab="tudo">TUDO</button>
@@ -164,21 +181,79 @@ input[type=search],input[type=text],input[type=number],select{border:1px solid #
 <div id="cbg" class="mbg"><div class="modal"><button class="x" id="cclose">✕</button><h2 id="ctit">📷 Ler código de barras</h2><div class="note">Aponte a câmera para o código, na horizontal e com boa luz.</div><div id="reader"></div><p id="cst" class="note"></p><div id="clast"></div></div></div>
 
 <script>
+/* ===== Supabase ===== */
+const SB_URL='https://yxgmbrpsssdtuqnobtmr.supabase.co';
+const SB_KEY='sb_publishable_uSjxyspXOj6PUb3E7SlTig_U_1BcAHv';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+window.sb=sb;
+const ROW='principal';
+
 const K='allava_estoque_v1',KP='allava_fotos_v1',KQ='allava_fotos_rapida_v1';
-let S=JSON.parse(localStorage.getItem(K)||'null')||{};
-S.items=S.items||[];S.logs=S.logs||[];S.lists=S.lists||[];S.ean=S.ean||{};S.quick=S.quick||[];
-S.lists.forEach(l=>{l.skus=l.skus||[];l.q=l.q||{}});
+const fix=o=>{o=o||{};o.items=o.items||[];o.logs=o.logs||[];o.lists=o.lists||[];o.ean=o.ean||{};o.quick=o.quick||[];o.lists.forEach(l=>{l.skus=l.skus||[];l.q=l.q||{}});return o};
+let S=fix(null);
 let P=JSON.parse(localStorage.getItem(KP)||'{}'),PQ=JSON.parse(localStorage.getItem(KQ)||'{}');
 let cur=null,act=null,scan=[],lastImg=null,qr=null,camCb=null,camKeep=false,camClose=null,camLast='',camLastT=0,Q=null,QL=null;
+let U=null,firstAuth=true,ver=null,saveT=null,pushing=false,stale=false,ch=null;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const key=s=>String(s).replace(/\s/g,'').toUpperCase();
 const bySku=s=>S.items.find(x=>x.sku===s)||S.items.find(x=>key(x.sku)===key(s));
-const save=()=>localStorage.setItem(K,JSON.stringify(S));
+const setSync=t=>$('#sync').textContent=t;
+
+/* ===== Gravação na nuvem (base principal, compartilhada) ===== */
+const save=()=>{if(!U)return;clearTimeout(saveT);setSync('⏳ salvando...');saveT=setTimeout(push,500)};
+async function push(){
+  saveT=null;pushing=true;
+  const t=new Date().toISOString();
+  const{error}=await sb.from('app_estado').upsert({id:ROW,dados:S,atualizado_em:t,atualizado_por:U?.email||''});
+  pushing=false;
+  if(error){setSync('❌ não salvo');alert('Erro ao salvar na nuvem: '+error.message);return}
+  ver=t;setSync('✔ salvo '+new Date().toLocaleTimeString('pt-BR'));
+}
+async function loadState(){
+  setSync('⏳ carregando...');
+  const{data,error}=await sb.from('app_estado').select('dados,atualizado_em').eq('id',ROW).maybeSingle();
+  if(error){setSync('❌ erro');alert('Erro ao carregar dados: '+error.message+'\nVerifique se a tabela app_estado foi criada no Supabase.');return}
+  if(data){S=fix(data.dados);ver=data.atualizado_em;setSync('✔ sincronizado')}
+  else{
+    const loc=JSON.parse(localStorage.getItem(K)||'null');
+    S=fix(loc&&loc.items&&loc.items.length&&confirm(`Encontrei ${loc.items.length} itens salvos neste aparelho. Enviar para a base principal?`)?loc:null);
+    await push();
+  }
+}
+async function remote(){
+  if(!U)return;
+  if(saveT||pushing||$('#mbg').classList.contains('open')||scan.length){stale=true;return}
+  const{data}=await sb.from('app_estado').select('dados,atualizado_em').eq('id',ROW).maybeSingle();
+  if(data&&data.atualizado_em!==ver){S=fix(data.dados);ver=data.atualizado_em;TRI=null;renderAll();setSync('🔄 atualizado '+new Date().toLocaleTimeString('pt-BR'))}
+}
+function sub(){
+  if(ch)return;
+  ch=sb.channel('estado').on('postgres_changes',{event:'*',schema:'public',table:'app_estado',filter:'id=eq.'+ROW},p=>{if(p.new?.atualizado_em!==ver)remote()}).subscribe();
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')remote()});
+$('#bref').onclick=()=>{stale=false;remote()};
+
+/* ===== Login ===== */
+const aGo=async f=>{const e=$('#aE').value.trim(),p=$('#aP').value;if(!e||!p)return $('#aM').textContent='Preencha e-mail e senha.';
+  $('#aM').textContent='Aguarde...';
+  const{data,error}=await sb.auth[f]({email:e,password:p});
+  if(error)return $('#aM').textContent='❌ '+(error.message==='Invalid login credentials'?'E-mail ou senha incorretos.':error.message);
+  if(!data.session)$('#aM').textContent='Conta criada. Confirme o e-mail recebido e depois entre.'};
+$('#aI').onclick=()=>aGo('signInWithPassword');$('#aC').onclick=()=>aGo('signUp');
+$('#aP').onkeydown=e=>{if(e.key==='Enter')aGo('signInWithPassword')};
+$('#bout').onclick=()=>{if(confirm('Sair?'))sb.auth.signOut()};
+sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;if(!firstAuth&&nu?.id===U?.id)return;firstAuth=false;U=nu;setTimeout(onAuth,0)});
+async function onAuth(){
+  if(!U){S=fix(null);ver=null;renderAll();$('#uemail').textContent='';setSync('');$('#aM').textContent='';$('#auth').classList.add('open');return}
+  $('#auth').classList.remove('open');$('#uemail').textContent=U.email;
+  await loadState();renderAll();sub();
+}
+
 const store=(k,o)=>{try{localStorage.setItem(k,JSON.stringify(o));return true}catch(e){alert('Memória de fotos do navegador cheia. Exclua registros antigos da contagem rápida.');return false}};
 const saveP=()=>store(KP,P),saveQ=()=>store(KQ,PQ);
-function log(name,msg){S.logs.push({t:new Date().toLocaleString('pt-BR'),name,msg});save();renderLog()}
+function log(name,msg){S.logs.push({t:new Date().toLocaleString('pt-BR'),name:(U?.email?U.email.split('@')[0]+' · ':'')+name,msg});save();renderLog()}
 const search=(q,lim)=>{const ws=norm(q).split(/\s+/).filter(Boolean);return S.items.filter(x=>{const t=norm(x.name+' '+x.sku+' '+codesOf(x).join(' '));return ws.every(w=>t.includes(w))}).slice(0,lim)};
 const thumb=s=>P[s]?`<img class="th" src="${P[s]}" alt="">`:'<span class="th"></span>';
 const resRow=(x,attr,badge,cls='')=>`<button class="res ${cls}" ${attr}="${esc(x.sku)}">${thumb(x.sku)}<span class="nm">${esc(x.name)}<br><span class="sk mono">${esc(x.sku)}${codesOf(x)[0]?' · '+esc(codesOf(x)[0]):''}</span></span><span class="badge">${badge??x.saldo+' un.'}</span></button>`;
@@ -253,10 +328,11 @@ const G={
 function setItems(){const f=$('#filtro').value;return f===''?S.items:(S.lists[+f]?.skus||[]).map(bySku).filter(Boolean)}
 function setName(){const f=$('#filtro').value;return f===''?'Todos os itens':'Lista: '+(S.lists[+f]?.name||'')}
 
-/* ===== Importação ===== */
+/* ===== Importação (grava na base principal) ===== */
 const COLS=[['name','Descrição',['descricao','produto','titulo','nome']],['ean','Código de Barras',['codigo de barras','cod barras','codigo barras','cod. barras','ean','gtin','barcode']],['sku','SKU',['sku']],['saldo','Quantidade',['quantidade','qtd','qtde','saldo','estoque']]];
 $('#bimp').onclick=()=>{
   $('#mbody').innerHTML=`<h2>📥 Importar planilha</h2>
+  <div class="alert">A importação atualiza a <b>base principal</b>: todos os usuários e aparelhos passam a ver a nova lista.</div>
   <p class="note">Arquivo <b>.xlsx</b>, <b>.xls</b> ou <b>.csv</b>, primeira aba, com estas colunas:</p>
   <table class="fmt"><tr><th>Coluna</th><th>Campo</th><th>Exemplo</th><th></th></tr>
   <tr><td>A</td><td><b>Descrição</b></td><td>Perfume 9PM Elixir 100ml</td><td>obrigatório</td></tr>
@@ -287,11 +363,13 @@ $('#imp').onchange=async e=>{
     seen.add(sku);novos.push({name,ean,sku,saldo:Math.round(Number(String(r[idx[3]]).replace(',','.'))||0)});
   });
   if(!novos.length)return alert('Nenhum item válido. Use as colunas: Descrição, Código de Barras, SKU, Quantidade.');
+  if(S.items.length&&!confirm(`Substituir os ${S.items.length} itens da base principal por ${novos.length} itens desta planilha? Todos os usuários verão a mudança.`))return;
   const old=new Map(S.items.map(x=>[x.sku,x.saldo]));let mud=0;
   novos.forEach(n=>{if(old.has(n.sku)&&old.get(n.sku)!==n.saldo)mud++});
   const ne=novos.filter(n=>n.ean).length;
-  S.items=novos;save();
+  S.items=novos;TRI=null;
   log('Sistema',`Planilha "${f.name}" importada: ${novos.length} itens${old.size?`, ${mud} quantidades alteradas`:''}, ${ne} com código de barras${ign?`, ${ign} linhas ignoradas (sem descrição/SKU ou SKU repetido)`:''}.`);
+  clearTimeout(saveT);await push();
   $('#mbg').classList.remove('open');renderAll();
 };
 
@@ -350,7 +428,7 @@ $('#results').onclick=e=>{const b=e.target.closest('.res');if(b)openItem(b.datas
 function renderLog(){
   $('#log').innerHTML=S.logs.length?S.logs.slice().reverse().map(l=>`<div class="lg"><b>${esc(l.name)}</b><br>${esc(l.msg)}<br><time>${esc(l.t)}</time></div>`).join(''):'<div class="empty">As ações aparecerão aqui, linha a linha.</div>';
 }
-$('#limpar').onclick=()=>{if(confirm('Limpar todo o histórico?')){S.logs=[];save();renderLog()}};
+$('#limpar').onclick=()=>{if(confirm('Limpar todo o histórico (para todos os usuários)?')){S.logs=[];save();renderLog()}};
 function renderLists(){
   $('#lists').innerHTML=S.lists.length?S.lists.map((l,i)=>`<div class="lst"><div class="lst-h"><span>${esc(l.name)} (${l.skus.length} itens · ${l.skus.reduce((s,k)=>s+(l.q[k]||0),0)} un.)</span><span><button class="btn small blue" data-go="${i}">Ler</button> <button class="btn small" data-dl="${i}">Excluir</button></span></div>${l.skus.map(s=>{const x=bySku(s);return`<div class="lst-i"><span data-open="${esc(s)}">${esc(x?x.name:s)}${l.q[s]?` · ${l.q[s]} na lista`:''}</span><button data-rm="${i}|${esc(s)}">✕</button></div>`}).join('')}</div>`).join(''):'<div class="note">Nenhuma lista. Use <b>🗂️ Lista rápida</b> na barra para criar e ir bipando.</div>';
   renderFiltro();
@@ -478,7 +556,7 @@ function drawQuick(){
   }
   $('#qq').oninput=e=>Q.qtd=+e.target.value;
   document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{Q.qtd=Math.max(0,(+$('#qq').value||0)+ +b.dataset.d);$('#qq').value=Q.qtd});
-  $('#qe').onclick=()=>$('#mbg').classList.remove('open');
+  $('#qe').onclick=closeModal;
   $('#qs').onclick=()=>{
     const q=+$('#qq').value;if(!Number.isInteger(q)||q<0)return alert('Quantidade inválida.');
     const it=Q.sku?bySku(Q.sku):null,desc=it?it.name:Q.desc.trim();
@@ -528,7 +606,7 @@ function openQ(id){
 
 /* ===== Modal do item ===== */
 function openItem(sku){cur=bySku(sku);if(!cur)return;act=null;$('#mbody').onchange=$('#mbody').onclick=null;drawModal();$('#mbg').classList.add('open')}
-function closeModal(){$('#mbg').classList.remove('open');QL=null;$('#mbody').onchange=$('#mbody').onclick=null;if($('#leitura').classList.contains('on'))$('#busca').focus()}
+function closeModal(){$('#mbg').classList.remove('open');QL=null;$('#mbody').onchange=$('#mbody').onclick=null;if($('#leitura').classList.contains('on'))$('#busca').focus();if(stale){stale=false;setTimeout(remote,800)}}
 $('#mclose').onclick=closeModal;
 $('#mbg').onclick=e=>{if(e.target.id==='mbg')closeModal()};
 function drawModal(){
@@ -664,7 +742,7 @@ function runScan(){
 $('#scan').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;lastImg=await loadImg(f);runScan()};
 $('#scan-pg').onchange=runScan;
 function renderScan(){
-  if(!scan.length){$('#scan-res').innerHTML='';return}
+  if(!scan.length){$('#scan-res').innerHTML='';if(stale){stale=false;setTimeout(remote,800)}return}
   $('#scan-res').innerHTML=`<div class="rowb"><b>${scan.length} itens lidos</b><button class="btn primary" id="okall">✔ Confirmar tudo</button></div>`+scan.map((r,i)=>{const x=bySku(r.sku);
     return`<div class="scan-line${!x?' bad':r.duvida?' warn':''}"><div><b>#${r.linha} ${x?esc(x.name):'SKU não encontrado'}</b><div class="note mono">${esc(r.sku)}${r.duvida?' · ⚠️ conferir':''}</div></div><div class="note">Tinha: <b>${x?x.saldo:'—'}</b></div><input type="number" min="0" value="${r.qtd}" data-sq="${i}"><button class="btn small primary" data-ok="${i}" ${x?'':'disabled'}>Confirmar</button><button class="btn small" data-del="${i}">✕</button></div>`}).join('');
   document.querySelectorAll('[data-sq]').forEach(el=>el.oninput=()=>scan[+el.dataset.sq].qtd=+el.value);
@@ -833,11 +911,8 @@ renderAll();
 <div id="ctFull"><img id="ctFullI" alt=""><button id="ctFullX">✕</button></div>
 
 <script type="module">
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const SB_URL='https://SEU-PROJETO.supabase.co';   // ⚠️ TROQUE: Project URL
-const SB_KEY='SUA-ANON-KEY';                       // ⚠️ TROQUE: chave anon / publishable
+const sb=window.sb;            // mesmo cliente/sessão do app principal
 const BK='fotos-contagem';
-const sb=createClient(SB_URL,SB_KEY);
 
 const q=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -862,23 +937,10 @@ async function upd(it,patch){const{error}=await sb.from('itens_contagem').update
 const pan=document.createElement('section');pan.id='contagem';pan.className='panel';
 const tab=document.createElement('button');tab.className='tab';tab.textContent='CONTAGEM';q('.tabs').appendChild(tab);
 q('#leitura').after(pan);
-tab.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===tab));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p===pan));document.querySelectorAll('.bar').forEach(x=>x.classList.remove('on'));scrollTo(0,0);render()};
+tab.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===tab));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p===pan));document.querySelectorAll('.bar').forEach(x=>x.classList.remove('on'));scrollTo(0,0);if(U)boot();else render()};
 
-function render(){if(!U)return drawLogin();if(CL)CL=L.find(l=>l.id===CL.id)||null;CL?drawList(CL):drawL()}
+function render(){if(!U)return pan.innerHTML='<div class="ct-card">Faça login para usar a contagem.</div>';if(CL)CL=L.find(l=>l.id===CL.id)||null;CL?drawList(CL):drawL()}
 
-/* ---------- Login ---------- */
-function drawLogin(){
-  pan.innerHTML=`<div class="ct-card"><h2>🔐 Entrar na Contagem</h2>
-  <div class="ct-row"><input id="lgE" class="ct-in" type="email" placeholder="E-mail" style="flex:1"></div>
-  <div class="ct-row"><input id="lgP" class="ct-in" type="password" placeholder="Senha (mín. 6)" style="flex:1"></div>
-  <div class="ct-row"><button class="cb p" id="lgI">Entrar</button><button class="cb" id="lgC">Criar conta</button></div>
-  <p class="ct-note" id="lgM"></p></div>`;
-  const go=async f=>{const e=q('#lgE').value.trim(),p=q('#lgP').value;if(!e||!p)return;q('#lgM').textContent='Aguarde...';
-    const{data,error}=await sb.auth[f]({email:e,password:p});
-    if(error)return q('#lgM').textContent='❌ '+error.message;
-    if(!data.session)q('#lgM').textContent='Confirme o e-mail recebido e depois entre.'};
-  q('#lgI').onclick=()=>go('signInWithPassword');q('#lgC').onclick=()=>go('signUp');
-}
 sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;if(!first&&nu?.id===U?.id)return;first=false;U=nu;setTimeout(boot,0)});
 async function boot(){
   if(!U){L=[];CL=null;return render()}
@@ -913,11 +975,10 @@ async function migrate(){
 /* ---------- Listas ---------- */
 function drawL(){
   CL=null;
-  pan.innerHTML=`<div class="ct-card"><div class="ct-row" style="justify-content:space-between;margin:0"><h2 style="margin:0">📦 Listas de contagem</h2><div><button class="cb" id="ctRf">↻</button> <button class="cb" id="ctOut">Sair</button></div></div>
+  pan.innerHTML=`<div class="ct-card"><div class="ct-row" style="justify-content:space-between;margin:0"><h2 style="margin:0">📦 Listas de contagem</h2><div><button class="cb" id="ctRf">↻</button></div></div>
   <div class="ct-note">${esc(U.email)}</div>
   <div class="ct-row"><input id="ctN" class="ct-in" style="flex:1" value="Contagem ${new Date().toLocaleDateString('pt-BR')}"><button class="cb p" id="ctNew">+ Criar lista</button></div>
   ${L.length?L.map((l,i)=>`<div class="ct-l"><div><b>${esc(l.nome)}</b><div class="ct-note">${l.itens.length} itens · ${tot(l)} un. · criada ${fdt(l.criado_em)}</div></div><button class="cb d" data-o="${i}">Abrir</button></div>`).join(''):'<p class="ct-note">Nenhuma lista. Crie a primeira acima.</p>'}</div>`;
-  q('#ctOut').onclick=()=>sb.auth.signOut();
   q('#ctRf').onclick=async()=>{try{await load()}catch(e){err(e)}render()};
   q('#ctNew').onclick=async()=>{const n=q('#ctN').value.trim();if(!n)return;
     const{data,error}=await sb.from('listas_contagem').insert({nome:n}).select().single();if(error)return err(error);
