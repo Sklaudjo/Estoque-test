@@ -790,163 +790,253 @@ function renderAll(){$('#count').textContent=S.items.length?`${S.items.length} i
 renderAll();
 </script>
 
-  <!-- ===== ABA CONTAGEM ===== -->
+<!-- ===== ABA CONTAGEM (Supabase) ===== -->
 <style>
-.ct-l{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid #e0e6ed;border-radius:10px;padding:12px;background:#fff;margin-top:8px;flex-wrap:wrap}
-#ctS{position:fixed;inset:0;background:#0b1622;z-index:40;display:none;flex-direction:column;color:#fff;overflow:auto}
-#ctS.open{display:flex}
+.cb{border:1px solid #cfd8e3;background:#fff;color:#1b2533;border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer;font-weight:700}
+.cb.p{background:#12805c;color:#fff;border-color:#12805c}.cb.d{background:#1b2533;color:#fff;border-color:#1b2533}
+.cb.r{color:#b42318}.cb-big{font-size:18px;padding:12px 18px;min-height:52px}.cb:disabled{opacity:.5}
+.ct-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.ct-in{border:1px solid #cfd8e3;border-radius:8px;padding:9px;font-size:15px}
+.ct-card{background:#fff;color:#1b2533;border-radius:12px;padding:12px;border:1px solid #e0e6ed}
+.ct-note{font-size:13px;color:#667}
+.ct-ok{background:#e7f6ee;color:#0d5c3f;padding:6px 8px;border-radius:6px;margin-bottom:6px;font-size:14px}
+.ct-al{background:#fff4e0;color:#8a5300;padding:6px 8px;border-radius:6px;margin-top:6px;font-size:14px}
+.ct-l{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid #e0e6ed;border-radius:10px;padding:12px;margin-top:8px;flex-wrap:wrap}
+.ct-it{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:1px solid #e0e6ed;border-radius:10px;padding:8px;background:#fff;margin-top:8px;cursor:pointer}
+.ct-it .nm{flex:1}.ct-bd{background:#12805c;color:#fff;border-radius:99px;padding:4px 10px;font-weight:700;white-space:nowrap}
+.ct-th{width:56px;height:56px;object-fit:cover;border-radius:8px;background:#e9eef3;flex:none;display:inline-block}
+#ctS{position:fixed;inset:0;background:#0b1622;z-index:40;display:none;flex-direction:column;color:#fff;overflow:auto}#ctS.open{display:flex}
 #ctV{width:100%;max-height:42vh;object-fit:cover;background:#000;flex:none}
 .ct-p{padding:12px;display:flex;flex-direction:column;gap:10px}
-.ct-card{background:#fff;color:#1b2533;border-radius:12px;padding:12px}
-.ct-q{font-size:32px!important;font-weight:700;width:110px!important;text-align:center}
+.ct-q{font-size:32px;font-weight:700;width:110px;text-align:center}
 .ct-ths{display:flex;gap:8px;flex-wrap:wrap}.ct-ths div{position:relative}
-.ct-ths img{width:64px;height:64px;object-fit:cover;border-radius:8px;background:#e9eef3}
+.ct-ths img{width:64px;height:64px;object-fit:cover;border-radius:8px;background:#e9eef3;cursor:zoom-in}
 .ct-ths button{position:absolute;top:-6px;right:-6px;border:0;border-radius:99px;background:#b42318;color:#fff;width:22px;height:22px;font-size:12px}
 .ct-mic{font-size:13px;color:#9fdcc1}
-.btn.big{font-size:18px;padding:12px 18px;min-height:52px}
+#ctM{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:none;align-items:center;justify-content:center}
+#ctM .box{background:#fff;color:#1b2533;width:92%;max-width:520px;max-height:90vh;overflow:auto;border-radius:12px;padding:16px}
+#ctFull{position:fixed;inset:0;background:#000;z-index:100;display:none;align-items:center;justify-content:center}
+#ctFullI{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}
+#ctFullX{position:absolute;top:12px;right:12px;width:44px;height:44px;border:0;border-radius:99px;background:#fff;font-size:20px}
 </style>
+
 <div id="ctS">
   <video id="ctV" playsinline muted autoplay></video>
+  <button id="ctSnap" class="cb d cb-big" style="margin:8px 12px 0" disabled>📸 FOTO</button>
   <div class="ct-p">
-    <div class="frm" style="margin:0"><input id="ctC" type="text" inputmode="numeric" placeholder="Código manual / leitor USB + Enter" style="flex:1"><button class="btn" id="ctX">Encerrar</button></div>
+    <div class="ct-row" style="margin:0"><input id="ctC" class="ct-in" type="text" inputmode="numeric" placeholder="Código manual / leitor USB + Enter" style="flex:1"><button class="cb" id="ctX">Encerrar</button></div>
     <div id="ctMic" class="ct-mic"></div>
     <div id="ctB"></div>
   </div>
 </div>
-<script>
-(async()=>{
-/* ---- Banco local (IndexedDB) ---- */
-let dbp;
-const idb=()=>dbp||(dbp=new Promise((ok,er)=>{const r=indexedDB.open('allava_contagem',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>ok(r.result);r.onerror=()=>er(r.error)}));
-const tx=async(m,f)=>{const d=await idb();return new Promise((ok,er)=>{const t=d.transaction('kv',m),r=f(t.objectStore('kv'));t.oncomplete=()=>ok(r&&r.result);t.onerror=()=>er(t.error)})};
-const get=k=>tx('readonly',s=>s.get(k)),put=(k,v)=>tx('readwrite',s=>s.put(v,k)),del=k=>tx('readwrite',s=>s.delete(k));
-navigator.storage?.persist?.();
-let L=(await get('lists'))||[],CL=null,pend=null,flash='',stream=null,det=null,busy=false,rec=null,micOn=false,wl=null,warnT=0;
-const saveL=()=>put('lists',L);
-const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-const tot=l=>l.items.reduce((s,i)=>s+i.qtd,0);
-const fill=r=>r.querySelectorAll('img[data-ph]').forEach(async im=>{im.src=(await get('ph:'+im.dataset.ph))||''});
-const find=c=>{const x=typeof byCode==='function'?byCode(c):null;return x?{code:c,sku:x.sku,name:x.name}:{code:c,sku:'',name:''}};
+<div id="ctM"><div class="box" id="ctMB"></div></div>
+<div id="ctFull"><img id="ctFullI" alt=""><button id="ctFullX">✕</button></div>
 
-/* ---- Aba ---- */
-const tab=document.createElement('button');tab.className='tab';tab.textContent='CONTAGEM';$('.tabs').appendChild(tab);
-const pan=document.createElement('section');pan.id='contagem';pan.className='panel';$('#leitura').after(pan);
-tab.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===tab));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p===pan));document.querySelectorAll('.bar').forEach(x=>x.classList.remove('on'));scrollTo(0,0);CL?drawList(CL):drawL()};
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const SB_URL='https://SEU-PROJETO.supabase.co';   // ⚠️ TROQUE: Project URL
+const SB_KEY='SUA-ANON-KEY';                       // ⚠️ TROQUE: chave anon / publishable
+const BK='fotos-contagem';
+const sb=createClient(SB_URL,SB_KEY);
 
+const q=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nrm=s=>String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const fdt=d=>new Date(d).toLocaleString('pt-BR');
+const err=e=>{console.error(e);alert('Erro: '+(e?.message||e))};
+let U=null,first=true,L=[],CL=null,pend=null,flash='',stream=null,det=null,busy=false,rec=null,micOn=false,wl=null,warnT=0,saving=false;
+const tot=l=>l.itens.reduce((s,i)=>s+i.qtd,0);
+const find=c=>{let x=null;try{x=typeof window.byCode==='function'?window.byCode(c):null}catch(e){}return{codigo:c,sku:x?.sku||'',descricao:x?.name||''}};
+
+/* ---------- Fotos (Storage) ---------- */
+const UC=new Map();
+async function purl(p){const c=UC.get(p);if(c&&c.exp>Date.now())return c.u;const{data,error}=await sb.storage.from(BK).createSignedUrl(p,3600);if(error)return'';UC.set(p,{u:data.signedUrl,exp:Date.now()+3e6});return data.signedUrl}
+const fill=r=>r.querySelectorAll('img[data-ph]').forEach(async im=>im.src=await purl(im.dataset.ph));
+async function up(blob){const p=`${U.id}/${crypto.randomUUID()}.jpg`;const{error}=await sb.storage.from(BK).upload(p,blob,{contentType:'image/jpeg'});if(error)throw error;return p}
+const rmPh=async ps=>{if(ps.length)await sb.storage.from(BK).remove(ps)};
+const toBlob=(src,w,h)=>{const s=Math.min(1,1200/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.round(w*s);c.height=Math.round(h*s);c.getContext('2d').drawImage(src,0,0,c.width,c.height);return new Promise(ok=>c.toBlob(ok,'image/jpeg',.75))};
+const fileBlob=async f=>{const b=await createImageBitmap(f);return toBlob(b,b.width,b.height)};
+async function upd(it,patch){const{error}=await sb.from('itens_contagem').update({...patch,atualizado_em:new Date().toISOString()}).eq('id',it.id);if(error)throw error;Object.assign(it,patch)}
+
+/* ---------- Aba ---------- */
+const pan=document.createElement('section');pan.id='contagem';pan.className='panel';
+const tab=document.createElement('button');tab.className='tab';tab.textContent='CONTAGEM';q('.tabs').appendChild(tab);
+q('#leitura').after(pan);
+tab.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===tab));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p===pan));document.querySelectorAll('.bar').forEach(x=>x.classList.remove('on'));scrollTo(0,0);render()};
+
+function render(){if(!U)return drawLogin();if(CL)CL=L.find(l=>l.id===CL.id)||null;CL?drawList(CL):drawL()}
+
+/* ---------- Login ---------- */
+function drawLogin(){
+  pan.innerHTML=`<div class="ct-card"><h2>🔐 Entrar na Contagem</h2>
+  <div class="ct-row"><input id="lgE" class="ct-in" type="email" placeholder="E-mail" style="flex:1"></div>
+  <div class="ct-row"><input id="lgP" class="ct-in" type="password" placeholder="Senha (mín. 6)" style="flex:1"></div>
+  <div class="ct-row"><button class="cb p" id="lgI">Entrar</button><button class="cb" id="lgC">Criar conta</button></div>
+  <p class="ct-note" id="lgM"></p></div>`;
+  const go=async f=>{const e=q('#lgE').value.trim(),p=q('#lgP').value;if(!e||!p)return;q('#lgM').textContent='Aguarde...';
+    const{data,error}=await sb.auth[f]({email:e,password:p});
+    if(error)return q('#lgM').textContent='❌ '+error.message;
+    if(!data.session)q('#lgM').textContent='Confirme o e-mail recebido e depois entre.'};
+  q('#lgI').onclick=()=>go('signInWithPassword');q('#lgC').onclick=()=>go('signUp');
+}
+sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;if(!first&&nu?.id===U?.id)return;first=false;U=nu;setTimeout(boot,0)});
+async function boot(){
+  if(!U){L=[];CL=null;return render()}
+  pan.innerHTML='<div class="ct-card">⏳ Carregando...</div>';
+  try{await migrate();await load()}catch(e){err(e)}
+  render();
+}
+async function load(){
+  const{data,error}=await sb.from('listas_contagem').select('*,itens:itens_contagem(*)').order('criado_em',{ascending:false});
+  if(error)throw error;
+  L=data.map(l=>({...l,itens:(l.itens||[]).sort((a,b)=>b.atualizado_em.localeCompare(a.atualizado_em))}));
+}
+
+/* ---------- Migração das listas antigas do aparelho ---------- */
+const idbOpen=()=>new Promise(ok=>{const r=indexedDB.open('allava_contagem',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>ok(r.result);r.onerror=()=>ok(null)});
+const kv=(d,m,f)=>new Promise(ok=>{const t=d.transaction('kv',m),r=f(t.objectStore('kv'));t.oncomplete=()=>ok(r?.result);t.onerror=()=>ok(null)});
+async function migrate(){
+  const d=await idbOpen();if(!d)return;
+  const old=await kv(d,'readonly',s=>s.get('lists'));if(!old?.length)return;
+  if(!confirm(`Encontrei ${old.length} lista(s) salvas neste aparelho. Enviar para a nuvem?`))return;
+  pan.innerHTML='<div class="ct-card">⏳ Migrando listas antigas...</div>';
+  for(const l of old){
+    const{data:nl,error}=await sb.from('listas_contagem').insert({nome:l.name}).select().single();if(error)throw error;
+    for(const it of l.items){
+      const ps=[];for(const id of it.photos){const du=await kv(d,'readonly',s=>s.get('ph:'+id));if(du)ps.push(await up(await (await fetch(du)).blob()))}
+      const{error:e2}=await sb.from('itens_contagem').insert({lista_id:nl.id,codigo:String(it.code),sku:it.sku||'',descricao:it.name||'',qtd:it.qtd,fotos:ps});if(e2)throw e2;
+    }
+  }
+  await kv(d,'readwrite',s=>s.clear());alert('✔ Migração concluída.');
+}
+
+/* ---------- Listas ---------- */
 function drawL(){
   CL=null;
-  pan.innerHTML=`<div class="card"><h2>📦 Listas de contagem</h2>
-  <div class="frm"><input id="ctN" type="text" style="flex:1" value="Contagem ${new Date().toLocaleDateString('pt-BR')}"><button class="btn primary" id="ctNew">+ Criar lista</button></div>
-  ${L.length?L.map((l,i)=>`<div class="ct-l"><div><b>${esc(l.name)}</b><div class="note">${l.items.length} itens · ${tot(l)} un. · criada ${esc(l.t)}</div></div><button class="btn blue" data-o="${i}">Abrir</button></div>`).join(''):'<div class="empty">Nenhuma lista. Crie a primeira acima.</div>'}</div>`;
-  $('#ctNew').onclick=()=>{const n=$('#ctN').value.trim();if(!n)return;const l={id:uid(),name:n,t:new Date().toLocaleString('pt-BR'),items:[]};L.unshift(l);saveL();drawList(l)};
+  pan.innerHTML=`<div class="ct-card"><div class="ct-row" style="justify-content:space-between;margin:0"><h2 style="margin:0">📦 Listas de contagem</h2><div><button class="cb" id="ctRf">↻</button> <button class="cb" id="ctOut">Sair</button></div></div>
+  <div class="ct-note">${esc(U.email)}</div>
+  <div class="ct-row"><input id="ctN" class="ct-in" style="flex:1" value="Contagem ${new Date().toLocaleDateString('pt-BR')}"><button class="cb p" id="ctNew">+ Criar lista</button></div>
+  ${L.length?L.map((l,i)=>`<div class="ct-l"><div><b>${esc(l.nome)}</b><div class="ct-note">${l.itens.length} itens · ${tot(l)} un. · criada ${fdt(l.criado_em)}</div></div><button class="cb d" data-o="${i}">Abrir</button></div>`).join(''):'<p class="ct-note">Nenhuma lista. Crie a primeira acima.</p>'}</div>`;
+  q('#ctOut').onclick=()=>sb.auth.signOut();
+  q('#ctRf').onclick=async()=>{try{await load()}catch(e){err(e)}render()};
+  q('#ctNew').onclick=async()=>{const n=q('#ctN').value.trim();if(!n)return;
+    const{data,error}=await sb.from('listas_contagem').insert({nome:n}).select().single();if(error)return err(error);
+    const l={...data,itens:[]};L.unshift(l);drawList(l)};
   pan.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>drawList(L[+b.dataset.o]));
 }
 function drawList(l){
   CL=l;
-  pan.innerHTML=`<div class="card"><div class="rowb"><button class="btn" id="ctBk">← Listas</button><button class="btn primary big" id="ctGo">▶ Começar contagem</button></div>
-  <h2>${esc(l.name)}</h2><div class="note">${l.items.length} itens · ${tot(l)} unidades</div>
-  <div class="frm"><b>Relatório:</b><button class="btn small" data-r="xlsx">📊 Excel</button><button class="btn small" data-r="pdf">📄 PDF</button><button class="btn small" data-r="csv">CSV</button>
-  <button class="btn small" id="ctRen">Renomear</button><button class="btn small" id="ctDel" style="color:#b42318">Excluir lista</button></div>
-  <div class="results">${l.items.length?l.items.map((it,i)=>`<button class="res" data-i="${i}">${it.photos[0]?`<img class="th" data-ph="${it.photos[0]}" alt="">`:'<span class="th"></span>'}<span class="nm">${esc(it.name||'(sem cadastro)')}<br><span class="sk mono">${esc(it.code)}${it.sku?' · '+esc(it.sku):''} · ${it.photos.length} foto(s)</span></span><span class="badge">${it.qtd} un.</span></button>`).join(''):'<div class="empty">Lista vazia. Toque em ▶ Começar contagem.</div>'}</div></div>`;
+  pan.innerHTML=`<div class="ct-card"><div class="ct-row" style="justify-content:space-between;margin:0"><button class="cb" id="ctBk">← Listas</button><button class="cb p cb-big" id="ctGo">▶ Começar contagem</button></div>
+  <h2>${esc(l.nome)}</h2><div class="ct-note">${l.itens.length} itens · ${tot(l)} unidades</div>
+  <div class="ct-row"><b>Relatório:</b><button class="cb" data-r="xlsx">📊 Excel</button><button class="cb" data-r="pdf">📄 PDF</button><button class="cb" data-r="csv">CSV</button>
+  <button class="cb" id="ctRen">Renomear</button><button class="cb r" id="ctDel">Excluir lista</button></div>
+  ${l.itens.length?l.itens.map((it,i)=>`<div class="ct-it" data-i="${i}">${it.fotos[0]?`<img class="ct-th" data-ph="${esc(it.fotos[0])}" alt="">`:'<span class="ct-th"></span>'}<span class="nm">${esc(it.descricao||'(sem cadastro)')}<br><span class="ct-note mono">${esc(it.codigo)}${it.sku?' · '+esc(it.sku):''} · ${it.fotos.length} foto(s)</span></span><span class="ct-bd">${it.qtd} un.</span></div>`).join(''):'<p class="ct-note">Lista vazia. Toque em ▶ Começar contagem.</p>'}</div>`;
   fill(pan);
-  $('#ctBk').onclick=drawL;
-  $('#ctGo').onclick=start;
-  $('#ctRen').onclick=()=>{const n=prompt('Novo nome:',l.name);if(n&&n.trim()){l.name=n.trim();saveL();drawList(l)}};
-  $('#ctDel').onclick=async()=>{if(!confirm(`Excluir a lista "${l.name}" e todas as fotos?`))return;for(const it of l.items)for(const p of it.photos)await del('ph:'+p);L=L.filter(x=>x!==l);saveL();drawL()};
+  q('#ctBk').onclick=drawL;q('#ctGo').onclick=start;
+  q('#ctRen').onclick=async()=>{const n=prompt('Novo nome:',l.nome);if(!n?.trim())return;const{error}=await sb.from('listas_contagem').update({nome:n.trim()}).eq('id',l.id);if(error)return err(error);l.nome=n.trim();drawList(l)};
+  q('#ctDel').onclick=async()=>{if(!confirm(`Excluir a lista "${l.nome}" e todas as fotos?`))return;
+    try{await rmPh(l.itens.flatMap(i=>i.fotos));const{error}=await sb.from('listas_contagem').delete().eq('id',l.id);if(error)throw error;L=L.filter(x=>x!==l);drawL()}catch(e){err(e)}};
   pan.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>rep(l,b.dataset.r));
   pan.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>editItem(+b.dataset.i));
 }
 
-/* ---- Editar item da lista ---- */
+/* ---------- Editar item ---------- */
+const closeM=()=>q('#ctM').style.display='none';
+q('#ctM').onclick=e=>{if(e.target.id==='ctM')closeM()};
 function editItem(i){
-  const it=CL.items[i],m=$('#mbody');
-  m.innerHTML=`<h2>${esc(it.name||'(sem cadastro)')}</h2>
-  <div class="info"><b>Código de barras</b><span class="mono">${esc(it.code)}</span><b>SKU</b><span class="mono">${esc(it.sku||'—')}</span><b>Registrado</b><span>${esc(it.t)}</span></div>
-  ${it.sku?'':`<input id="ceN" type="text" placeholder="Descrição" value="${esc(it.name)}" style="width:100%">`}
-  <div class="frm"><button class="btn" data-d="-1">−1</button><input id="ceQ" type="number" min="0" value="${it.qtd}"><button class="btn" data-d="1">+1</button><button class="btn primary" id="ceS">Salvar</button></div>
-  <div class="ct-ths" style="margin-top:12px">${it.photos.map((p,j)=>`<div><img data-ph="${p}" alt=""><button data-x="${j}">✕</button></div>`).join('')||'<span class="note">Sem fotos</span>'}</div>
-  <div class="frm"><label class="btn dark" for="ceF">📷 Acrescentar foto</label><input id="ceF" type="file" accept="image/*" capture="environment" multiple><button class="btn" id="ceR" style="color:#b42318">Remover item</button></div>`;
+  const it=CL.itens[i],m=q('#ctMB');
+  m.innerHTML=`<h2>${esc(it.descricao||'(sem cadastro)')}</h2>
+  <div class="ct-note">Código: <span class="mono">${esc(it.codigo)}</span> · SKU: <span class="mono">${esc(it.sku||'—')}</span> · ${fdt(it.atualizado_em)}</div>
+  <div class="ct-row"><input id="ceN" class="ct-in" placeholder="Descrição" value="${esc(it.descricao)}" style="flex:1"></div>
+  <div class="ct-row"><button class="cb" data-d="-1">−1</button><input id="ceQ" class="ct-in" type="number" min="0" value="${it.qtd}" style="width:90px"><button class="cb" data-d="1">+1</button><button class="cb p" id="ceS">Salvar</button></div>
+  <div class="ct-ths" style="margin-top:12px">${it.fotos.map((p,j)=>`<div><img data-ph="${esc(p)}" alt=""><button data-x="${j}">✕</button></div>`).join('')||'<span class="ct-note">Sem fotos</span>'}</div>
+  <div class="ct-row"><label class="cb d" for="ceF">📷 Acrescentar foto</label><input id="ceF" type="file" accept="image/*" capture="environment" multiple hidden>
+  <button class="cb r" id="ceR">Remover item</button><button class="cb" id="ceC">Fechar</button></div>
+  <p class="ct-note" id="ceM"></p>`;
   fill(m);
-  m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{$('#ceQ').value=Math.max(0,(+$('#ceQ').value||0)+ +b.dataset.d)});
-  $('#ceS').onclick=()=>{const v=+$('#ceQ').value;if(!Number.isInteger(v)||v<0)return alert('Quantidade inválida.');it.qtd=v;if($('#ceN'))it.name=$('#ceN').value.trim();saveL();closeModal();drawList(CL)};
-  m.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{if(!confirm('Excluir esta foto?'))return;const[id]=it.photos.splice(+b.dataset.x,1);await del('ph:'+id);saveL();drawList(CL);editItem(i)});
-  $('#ceF').onchange=async e=>{for(const f of e.target.files){const id=uid();await put('ph:'+id,await resize(f,1000,.7));it.photos.push(id)}saveL();drawList(CL);editItem(i)};
-  $('#ceR').onclick=async()=>{if(!confirm('Remover este item da lista?'))return;for(const p of it.photos)await del('ph:'+p);CL.items.splice(i,1);saveL();closeModal();drawList(CL)};
-  $('#mbg').classList.add('open');
+  q('#ceC').onclick=closeM;
+  m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{q('#ceQ').value=Math.max(0,(+q('#ceQ').value||0)+ +b.dataset.d)});
+  q('#ceS').onclick=async()=>{const v=+q('#ceQ').value;if(!Number.isInteger(v)||v<0)return alert('Quantidade inválida.');
+    try{await upd(it,{qtd:v,descricao:q('#ceN').value.trim()});closeM();drawList(CL)}catch(e){err(e)}};
+  m.querySelectorAll('[data-x]').forEach(b=>b.onclick=async e=>{e.stopPropagation();if(!confirm('Excluir esta foto?'))return;
+    const p=it.fotos[+b.dataset.x];try{await rmPh([p]);await upd(it,{fotos:it.fotos.filter(x=>x!==p)});drawList(CL);editItem(i)}catch(e){err(e)}});
+  q('#ceF').onchange=async e=>{q('#ceM').textContent='⏳ Enviando...';
+    try{const ps=[];for(const f of e.target.files)ps.push(await up(await fileBlob(f)));await upd(it,{fotos:[...it.fotos,...ps]});drawList(CL);editItem(i)}catch(e){err(e)}};
+  q('#ceR').onclick=async()=>{if(!confirm('Remover este item da lista?'))return;
+    try{await rmPh(it.fotos);const{error}=await sb.from('itens_contagem').delete().eq('id',it.id);if(error)throw error;CL.itens.splice(i,1);closeM();drawList(CL)}catch(e){err(e)}};
+  q('#ctM').style.display='flex';
 }
 
-/* ---- Sessão de contagem ---- */
+/* ---------- Sessão de contagem ---------- */
 async function start(){
-  $('#ctS').classList.add('open');pend=null;flash='';drawB();
-  try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},audio:false});
-    $('#ctV').srcObject=stream;await $('#ctV').play();
-  }catch(e){flash='❌ Câmera indisponível: '+(e.message||e);drawB()}
-  if('BarcodeDetector' in window){
-    try{const fm=await BarcodeDetector.getSupportedFormats();det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'].filter(f=>fm.includes(f))});loop()}catch(e){det=null}
-  }
-  if(!det){flash='Leitura automática indisponível neste navegador: digite o código ou use um leitor USB.';drawB()}
+  q('#ctS').classList.add('open');pend=null;flash='';drawB();
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},audio:false});q('#ctV').srcObject=stream;await q('#ctV').play()}
+  catch(e){flash='❌ Câmera indisponível: '+(e.message||e);drawB()}
+  if('BarcodeDetector' in window){try{const fm=await BarcodeDetector.getSupportedFormats();det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'].filter(f=>fm.includes(f))});loop()}catch(e){det=null}}
+  if(!det){flash='Leitura automática indisponível: digite o código ou use leitor USB.';drawB()}
   mic(true);
   try{wl=await navigator.wakeLock?.request('screen')}catch(e){}
 }
 async function loop(){
-  if(!stream||!det)return;
-  const v=$('#ctV');
+  if(!stream||!det)return;const v=q('#ctV');
   if(!busy&&v.readyState>=2){busy=true;try{const r=await det.detect(v);if(r[0])onCode(r[0].rawValue)}catch(e){}busy=false}
   setTimeout(loop,250);
 }
 function onCode(c){
-  c=key(c);if(!c)return;
-  if(pend){if(pend.code!==c&&Date.now()-warnT>3000){warnT=Date.now();flash='⚠️ Efetive ou descarte o item atual antes de ler outro.';drawB()}return}
+  c=String(c).trim().replace(/\s+/g,'').toUpperCase();if(!c)return;
+  if(pend){if(pend.codigo!==c&&Date.now()-warnT>3000){warnT=Date.now();flash='⚠️ Efetive ou descarte o item atual antes de ler outro.';drawB()}return}
   pend={...find(c),qtd:1,photos:[]};flash='';navigator.vibrate?.(80);drawB();
 }
-function snap(){
-  if(!pend)return;const v=$('#ctV');if(!v.videoWidth)return alert('Câmera não está ativa.');
-  const s=Math.min(1,1000/Math.max(v.videoWidth,v.videoHeight)),c=document.createElement('canvas');
-  c.width=Math.round(v.videoWidth*s);c.height=Math.round(v.videoHeight*s);c.getContext('2d').drawImage(v,0,0,c.width,c.height);
-  pend.photos.push(c.toDataURL('image/jpeg',.7));navigator.vibrate?.(40);
-  v.style.opacity=.3;setTimeout(()=>v.style.opacity=1,120);drawB();
+async function snap(){
+  if(!pend)return;const v=q('#ctV');if(!v.videoWidth)return alert('Câmera não está ativa.');
+  const b=await toBlob(v,v.videoWidth,v.videoHeight);pend.photos.push({b,u:URL.createObjectURL(b)});
+  navigator.vibrate?.(40);v.style.opacity=.3;setTimeout(()=>v.style.opacity=1,120);drawB();
 }
 async function efetivar(){
-  if(!pend)return;
+  if(!pend||saving)return;
   if(!Number.isInteger(pend.qtd)||pend.qtd<0)return alert('Quantidade inválida.');
-  const ids=[];for(const p of pend.photos){const id=uid();await put('ph:'+id,p);ids.push(id)}
-  const ex=CL.items.find(i=>i.code===pend.code);
-  if(ex){ex.qtd+=pend.qtd;ex.photos.push(...ids);ex.t=new Date().toLocaleString('pt-BR')}
-  else CL.items.unshift({code:pend.code,sku:pend.sku,name:pend.name,qtd:pend.qtd,photos:ids,t:new Date().toLocaleString('pt-BR')});
-  await saveL();
-  flash=`✔ ${pend.name||pend.code}: ${pend.qtd} un. gravado${ex?` (total ${ex.qtd})`:''}.`;
-  pend=null;navigator.vibrate?.([60,60,60]);drawB();
+  saving=true;flash='⏳ Gravando...';drawB();
+  try{
+    const ps=[];for(const f of pend.photos)ps.push(await up(f.b));
+    const ex=CL.itens.find(i=>i.codigo===pend.codigo);
+    if(ex){await upd(ex,{qtd:ex.qtd+pend.qtd,fotos:[...ex.fotos,...ps],...(pend.descricao&&!ex.descricao?{descricao:pend.descricao}:{})});CL.itens=[ex,...CL.itens.filter(i=>i!==ex)]}
+    else{const{data,error}=await sb.from('itens_contagem').insert({lista_id:CL.id,codigo:pend.codigo,sku:pend.sku,descricao:pend.descricao,qtd:pend.qtd,fotos:ps}).select().single();if(error)throw error;CL.itens.unshift(data)}
+    pend.photos.forEach(f=>URL.revokeObjectURL(f.u));
+    flash=`✔ ${pend.descricao||pend.codigo}: ${pend.qtd} un. gravado${ex?` (total ${ex.qtd})`:''}.`;
+    pend=null;navigator.vibrate?.([60,60,60]);
+  }catch(e){flash='❌ Falha ao gravar (verifique a internet): '+(e.message||e)}
+  saving=false;drawB();
 }
-function descartar(){if(!pend)return;pend=null;flash='Item descartado.';drawB()}
+function descartar(){if(!pend)return;pend.photos.forEach(f=>URL.revokeObjectURL(f.u));pend=null;flash='Item descartado.';drawB()}
 function drawB(){
-  const b=$('#ctB'),fl=flash?`<div class="ok">${esc(flash)}</div>`:'';
-  if(!pend){b.innerHTML=`<div class="ct-card">${fl}<b>${esc(CL.name)}</b> · ${CL.items.length} itens · ${tot(CL)} un.<div class="note">Aponte a câmera para o código de barras.</div></div>`;return}
-  const ex=CL.items.find(i=>i.code===pend.code);
+  const sbn=q('#ctSnap');sbn.disabled=!pend;sbn.textContent=pend?`📸 FOTO (${pend.photos.length})`:'📸 FOTO (leia um código primeiro)';
+  const b=q('#ctB'),fl=flash?`<div class="ct-ok">${esc(flash)}</div>`:'';
+  if(!pend){b.innerHTML=`<div class="ct-card">${fl}<b>${esc(CL.nome)}</b> · ${CL.itens.length} itens · ${tot(CL)} un.<div class="ct-note">Aponte a câmera para o código de barras.</div></div>`;return}
+  const ex=CL.itens.find(i=>i.codigo===pend.codigo);
   b.innerHTML=`<div class="ct-card">${fl}
-  <b style="font-size:17px">${esc(pend.name||'Código não cadastrado')}</b><div class="note mono">${esc(pend.code)}${pend.sku?' · SKU '+esc(pend.sku):''}</div>
-  ${pend.sku?'':`<input id="ctNm" type="text" placeholder="Descreva o produto" value="${esc(pend.name)}" style="width:100%;margin-top:6px">`}
-  ${ex?`<div class="alert">Já está na lista com ${ex.qtd} un. A quantidade será somada.</div>`:''}
-  <div class="frm"><button class="btn big" data-d="-1">−</button><input id="ctQ" class="ct-q" type="number" min="0" value="${pend.qtd}"><button class="btn big" data-d="1">+</button></div>
-  <div class="ct-ths" style="margin-top:10px">${pend.photos.map((p,j)=>`<div><img src="${p}" alt=""><button data-x="${j}">✕</button></div>`).join('')}</div>
-  <div class="frm"><button class="btn dark big" id="ctF">📸 Foto (${pend.photos.length})</button><button class="btn primary big" id="ctOk">✔ EFETIVAR</button><button class="btn" id="ctD">Descartar</button></div></div>`;
-  if($('#ctNm'))$('#ctNm').oninput=e=>pend.name=e.target.value;
-  $('#ctQ').oninput=e=>pend.qtd=+e.target.value;
+  <b style="font-size:17px">${esc(pend.descricao||'Código não cadastrado')}</b><div class="ct-note mono">${esc(pend.codigo)}${pend.sku?' · SKU '+esc(pend.sku):''}</div>
+  ${pend.sku?'':`<input id="ctNm" class="ct-in" placeholder="Descreva o produto" value="${esc(pend.descricao)}" style="width:100%;margin-top:6px">`}
+  ${ex?`<div class="ct-al">Já está na lista com ${ex.qtd} un. A quantidade será somada.</div>`:''}
+  <div class="ct-row"><button class="cb cb-big" data-d="-1">−</button><input id="ctQ" class="ct-in ct-q" type="number" min="0" value="${pend.qtd}"><button class="cb cb-big" data-d="1">+</button></div>
+  <div class="ct-ths" style="margin-top:10px">${pend.photos.map((p,j)=>`<div><img src="${p.u}" alt=""><button data-x="${j}">✕</button></div>`).join('')}</div>
+  <div class="ct-row"><button class="cb p cb-big" id="ctOk" ${saving?'disabled':''}>✔ EFETIVAR</button><button class="cb" id="ctD">Descartar</button></div></div>`;
+  if(q('#ctNm'))q('#ctNm').oninput=e=>pend.descricao=e.target.value;
+  q('#ctQ').oninput=e=>pend.qtd=+e.target.value;
   b.querySelectorAll('[data-d]').forEach(x=>x.onclick=()=>{pend.qtd=Math.max(0,(pend.qtd|0)+ +x.dataset.d);drawB()});
-  b.querySelectorAll('[data-x]').forEach(x=>x.onclick=()=>{pend.photos.splice(+x.dataset.x,1);drawB()});
-  $('#ctF').onclick=snap;$('#ctOk').onclick=efetivar;$('#ctD').onclick=descartar;
+  b.querySelectorAll('[data-x]').forEach(x=>x.onclick=e=>{e.stopPropagation();URL.revokeObjectURL(pend.photos[+x.dataset.x].u);pend.photos.splice(+x.dataset.x,1);drawB()});
+  q('#ctOk').onclick=efetivar;q('#ctD').onclick=descartar;
 }
 async function stop(){
   if(pend&&!confirm('Há um item não efetivado. Encerrar e descartar?'))return;
-  pend=null;mic(false);det=null;
+  if(pend)descartar();pend=null;mic(false);det=null;
   stream?.getTracks().forEach(t=>t.stop());stream=null;
   try{await wl?.release()}catch(e){}wl=null;
-  $('#ctS').classList.remove('open');drawList(CL);
+  q('#ctS').classList.remove('open');drawList(CL);
 }
-$('#ctX').onclick=stop;
-$('#ctC').onkeydown=e=>{if(e.key!=='Enter')return;const v=e.target.value.trim();e.target.value='';e.target.blur();if(v)onCode(v)};
+q('#ctX').onclick=stop;q('#ctSnap').onclick=snap;
+q('#ctC').onkeydown=e=>{if(e.key!=='Enter')return;const v=e.target.value.trim();e.target.value='';e.target.blur();if(v)onCode(v)};
 
-/* ---- Voz ---- */
+/* ---------- Voz ---------- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const NW={zero:0,um:1,uma:1,dois:2,duas:2,tres:3,quatro:4,cinco:5,seis:6,sete:7,oito:8,nove:9,dez:10,onze:11,doze:12,treze:13,quatorze:14,catorze:14,quinze:15,dezesseis:16,dezessete:17,dezoito:18,dezenove:19,vinte:20,trinta:30,quarenta:40,cinquenta:50,sessenta:60,setenta:70,oitenta:80,noventa:90,cem:100,cento:100,duzentos:200,duzentas:200,trezentos:300,trezentas:300,quatrocentos:400,quinhentos:500,seiscentos:600,setecentos:700,oitocentos:800,novecentos:900,mil:1000};
 function num(t){
@@ -956,7 +1046,7 @@ function num(t){
   return ok?tt+c:null;
 }
 function voice(raw){
-  const t=norm(raw).trim();$('#ctMic').textContent='🎤 Ouvi: "'+raw.trim()+'"';
+  const t=nrm(raw).trim();q('#ctMic').textContent='🎤 Ouvi: "'+raw.trim()+'"';
   if(/efetiv|confirm|gravar|salvar/.test(t))return efetivar();
   if(/foto|fotografa|tira/.test(t))return snap();
   if(/descart|cancel/.test(t))return descartar();
@@ -964,37 +1054,45 @@ function voice(raw){
 }
 function mic(on){
   micOn=on;
-  if(!SR){$('#ctMic').textContent='🎤 Comando de voz não suportado neste navegador.';return}
+  if(!SR){q('#ctMic').textContent='🎤 Comando de voz não suportado neste navegador.';return}
   if(!on){const r=rec;rec=null;try{r?.abort()}catch(e){}return}
   rec=new SR();rec.lang='pt-BR';rec.continuous=true;rec.interimResults=false;
   rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)voice(e.results[i][0].transcript)};
-  rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){micOn=false;$('#ctMic').textContent='🎤 Microfone bloqueado. Permita nas configurações do site.'}};
+  rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){micOn=false;q('#ctMic').textContent='🎤 Microfone bloqueado. Permita nas configurações do site.'}};
   rec.onend=()=>{if(micOn&&rec)setTimeout(()=>{try{rec.start()}catch(e){}},300)};
   try{rec.start()}catch(e){}
-  $('#ctMic').textContent='🎤 Ouvindo: diga a quantidade, "foto", "efetivar" ou "descartar".';
+  q('#ctMic').textContent='🎤 Ouvindo: diga a quantidade, "foto", "efetivar" ou "descartar".';
 }
 
-/* ---- Relatórios ---- */
+/* ---------- Foto em tela cheia ---------- */
+document.addEventListener('click',e=>{
+  const im=e.target.closest('#contagem img.ct-th, .ct-ths img');
+  if(!im||!im.src)return;e.preventDefault();e.stopPropagation();
+  q('#ctFullI').src=im.src;q('#ctFull').style.display='flex';
+},true);
+q('#ctFull').onclick=e=>{if(e.target.id!=='ctFullI')q('#ctFull').style.display='none'};
+
+/* ---------- Relatórios ---------- */
 const H=['Descrição','Código de Barras','SKU','Quantidade'];
-const rows=l=>l.items.map(it=>{const x=it.sku&&typeof bySku==='function'?bySku(it.sku):null;return[it.name||x?.name||'',String(it.code),it.sku||'',it.qtd]});
+const rows=l=>l.itens.map(it=>[it.descricao||'',String(it.codigo),it.sku||'',it.qtd]);
 function rep(l,f){
-  const r=rows(l),fn=l.name.replace(/[^\w\-]+/g,'_');
+  const r=rows(l),fn=l.nome.replace(/[^\w\-]+/g,'_');
   if(!r.length)return alert('Lista vazia.');
-  if(f==='xlsx'){
-    const ws=XLSX.utils.aoa_to_sheet([H,...r]);ws['!cols']=[{wch:45},{wch:18},{wch:18},{wch:12}];
-    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Contagem');XLSX.writeFile(wb,fn+'.xlsx');
+  if(f==='pdf'){
+    const w=window.open('','_blank');
+    w.document.write(`<html><head><title>${esc(l.nome)}</title><style>body{font-family:Arial;font-size:11pt}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:5px;text-align:left}th{background:#eee}</style></head><body>
+    <h1 style="font-size:16pt">${esc(l.nome)}</h1><p>${new Date().toLocaleString('pt-BR')} · ${l.itens.length} itens · ${tot(l)} unidades</p>
+    <table><tr>${H.map(h=>`<th>${h}</th>`).join('')}</tr>${r.map(x=>`<tr>${x.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</table></body></html>`);
+    w.document.close();setTimeout(()=>w.print(),400);
   }else if(f==='csv'){
     const c='\ufeff'+[H,...r].map(x=>x.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:'text/csv;charset=utf-8'}));a.download=fn+'.csv';a.click();
   }else{
-    $('#relatorio').innerHTML=`<h1 style="font-size:16pt">${esc(l.name)}</h1><p>${new Date().toLocaleString('pt-BR')} · ${l.items.length} itens · ${tot(l)} unidades</p>
-    <table><tr>${H.map(h=>`<th>${h}</th>`).join('')}</tr>${r.map(x=>`<tr>${x.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</table>`;
-    document.body.dataset.print='leitura';print();
+    const ws=XLSX.utils.aoa_to_sheet([H,...r]);ws['!cols']=[{wch:45},{wch:18},{wch:18},{wch:12}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Contagem');XLSX.writeFile(wb,fn+'.xlsx');
   }
 }
-})();
 </script>
 
-  
 </body>
 </html>
