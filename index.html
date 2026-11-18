@@ -190,7 +190,7 @@ window.sb=sb;
 const ROW='principal';
 
 const K='allava_estoque_v1',KP='allava_fotos_v1',KQ='allava_fotos_rapida_v1';
-const fix=o=>{o=o||{};o.items=o.items||[];o.logs=o.logs||[];o.lists=o.lists||[];o.ean=o.ean||{};o.quick=o.quick||[];o.fotos=o.fotos||{};o.qfotos=o.qfotos||{};o.lists.forEach(l=>{l.skus=l.skus||[];l.q=l.q||{}});return o};
+const fix=o=>{o=o||{};o.items=o.items||[];o.logs=o.logs||[];o.lists=o.lists||[];o.ean=o.ean||{};o.quick=o.quick||[];o.fotos=o.fotos||{};o.qfotos=o.qfotos||{};const sk=new Set();o.items=o.items.filter(x=>{const k=String(x.sku).replace(/\s/g,'').toUpperCase();if(sk.has(k))return false;sk.add(k);return true});o.lists.forEach(l=>{l.skus=[...new Set(l.skus||[])];l.q=l.q||{}});return o};
 let S=fix(null);
 let cur=null,act=null,scan=[],lastImg=null,qr=null,camCb=null,camKeep=false,camClose=null,camLast='',camLastT=0,Q=null,QL=null;
 let U=null,firstAuth=true,ver=null,saveT=null,pushing=false,stale=false,ch=null;
@@ -388,23 +388,44 @@ $('#imp').onchange=async e=>{
   let idx=COLS.map(c=>hd.findIndex(h=>c[2].includes(h)));
   let start=1;
   if(idx[0]<0||idx[3]<0){idx=[0,1,2,3];start=isNaN(parseFloat(rows[0][3]))?1:0}
-  const novos=[],seen=new Set();let ign=0;
+  const mp=new Map();let ign=0,dup=0;
   rows.slice(start).forEach(r=>{
     const name=cell(r[idx[0]]),ean=idx[1]>=0?cell(r[idx[1]]):'';let sku=idx[2]>=0?cell(r[idx[2]]):'';
     if(!sku)sku=ean;
-    if(!name||!sku||seen.has(sku)){if(name||sku)ign++;return}
-    seen.add(sku);novos.push({name,ean,sku,saldo:Math.round(Number(String(r[idx[3]]).replace(',','.'))||0)});
+    if(!name||!sku){if(name||sku)ign++;return}
+    const k=key(sku),qt=Math.round(Number(String(r[idx[3]]).replace(',','.'))||0),o=mp.get(k);
+    if(o){dup++;o.saldo+=qt;if(!o.ean&&ean)o.ean=ean;return}
+    mp.set(k,{name,ean,sku,saldo:qt});
   });
+  const novos=[...mp.values()];
   if(!novos.length)return alert('Nenhum item válido. Use as colunas: Descrição, Código de Barras, SKU, Quantidade.');
-  if(S.items.length&&!confirm(`Substituir os ${S.items.length} itens da base principal por ${novos.length} itens desta planilha? Todos os usuários verão a mudança.`))return;
-  const old=new Map(S.items.map(x=>[x.sku,x.saldo]));let mud=0;
-  novos.forEach(n=>{if(old.has(n.sku)&&old.get(n.sku)!==n.saldo)mud++});
-  const ne=novos.filter(n=>n.ean).length;
-  S.items=novos;TRI=null;
-  log('Sistema',`Planilha "${f.name}" importada: ${novos.length} itens${old.size?`, ${mud} quantidades alteradas`:''}, ${ne} com código de barras${ign?`, ${ign} linhas ignoradas (sem descrição/SKU ou SKU repetido)`:''}.`);
+  if(!S.items.length)return aplicarImp('sub',novos,f.name,ign,dup);
+  const ex=new Set(S.items.map(x=>key(x.sku))),iguais=novos.filter(n=>ex.has(key(n.sku))).length;
+  $('#mbody').innerHTML=`<h2>📥 ${esc(f.name)}</h2>
+  <div class="info"><b>Na planilha</b><span>${novos.length} itens${dup?` (${dup} linhas repetidas foram somadas)`:''}</span>
+  <b>Já existem na base</b><span>${iguais}</span><b>Novos</b><span>${novos.length-iguais}</span><b>Base atual</b><span>${S.items.length} itens</span></div>
+  <div class="actions">
+    <button class="action" id="imS">🔁 Substituir tudo<br><span class="note">a base fica igual à planilha</span></button>
+    <button class="action" id="imM">➕ Atualizar e acrescentar<br><span class="note">atualiza os existentes, acrescenta os novos e mantém os demais</span></button>
+  </div>`;
+  $('#imS').onclick=()=>aplicarImp('sub',novos,f.name,ign,dup);
+  $('#imM').onclick=()=>aplicarImp('mes',novos,f.name,ign,dup);
+  $('#mbg').classList.add('open');
+};
+async function aplicarImp(modo,novos,fn,ign,dup){
+  const old=new Map(S.items.map(x=>[key(x.sku),x]));let mud=0,add=0;
+  if(modo==='sub'){
+    novos.forEach(n=>{const o=old.get(key(n.sku));if(o){n.sku=o.sku;if(o.saldo!==n.saldo)mud++}});
+    S.items=novos;
+  }else novos.forEach(n=>{const o=old.get(key(n.sku));
+    if(o){if(o.saldo!==n.saldo)mud++;o.name=n.name;if(n.ean)o.ean=n.ean;o.saldo=n.saldo}
+    else{S.items.push(n);add++}});
+  TRI=null;
+  log('Sistema',`Planilha "${fn}" ${modo==='sub'?'substituiu a base':'mesclada'}: ${novos.length} itens, ${mud} quantidades alteradas${add?`, ${add} novos`:''}${dup?`, ${dup} linhas repetidas somadas`:''}${ign?`, ${ign} linhas ignoradas`:''}.`);
   clearTimeout(saveT);await push();
   $('#mbg').classList.remove('open');renderAll();
-};
+}
+;
 
 /* ===== Aba TUDO ===== */
 function renderFiltro(){
