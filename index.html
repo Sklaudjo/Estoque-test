@@ -425,7 +425,6 @@ async function aplicarImp(modo,novos,fn,ign,dup){
   clearTimeout(saveT);await push();
   $('#mbg').classList.remove('open');renderAll();
 }
-;
 
 /* ===== Aba TUDO ===== */
 function renderFiltro(){
@@ -979,9 +978,19 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const nrm=s=>String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const fdt=d=>new Date(d).toLocaleString('pt-BR');
 const err=e=>{console.error(e);alert('Erro: '+(e?.message||e))};
-let U=null,first=true,L=[],CL=null,pend=null,flash='',stream=null,det=null,busy=false,rec=null,micOn=false,wl=null,warnT=0,saving=false;
+let U=null,first=true,L=[],CL=null,pend=null,flash='',stream=null,det=null,busy=false,rec=null,micOn=false,wl=null,warnT=0,saving=false,BDC=null;
 const tot=l=>l.itens.reduce((s,i)=>s+i.qtd,0);
 const find=c=>{let x=null;try{x=typeof window.byCode==='function'?window.byCode(c):null}catch(e){}return{codigo:c,sku:x?.sku||'',descricao:x?.name||''}};
+
+/* ---------- Leitor de código: nativo (Android) ou substituto (iPhone) ---------- */
+async function getBD(){
+  if(BDC)return BDC;
+  if('BarcodeDetector' in window)return BDC=window.BarcodeDetector;
+  for(const u of['https://cdn.jsdelivr.net/npm/barcode-detector@2/dist/es/pure.js','https://esm.sh/barcode-detector@2/pure']){
+    try{const m=await import(u);if(m.BarcodeDetector)return BDC=m.BarcodeDetector}catch(e){}
+  }
+  return null;
+}
 
 /* ---------- Fotos (Storage) ---------- */
 const UC=new Map();
@@ -1032,18 +1041,30 @@ async function migrate(){
   await kv(d,'readwrite',s=>s.clear());alert('✔ Migração concluída.');
 }
 
+/* ---------- Excluir lista (fotos + itens + lista) ---------- */
+async function delList(l){
+  if(!confirm(`Excluir a lista "${l.nome}", todos os itens e fotos? Não dá para desfazer.`))return false;
+  try{
+    await rmPh(l.itens.flatMap(i=>i.fotos||[]));
+    const{error:e1}=await sb.from('itens_contagem').delete().eq('lista_id',l.id);if(e1)throw e1;
+    const{error}=await sb.from('listas_contagem').delete().eq('id',l.id);if(error)throw error;
+    L=L.filter(x=>x.id!==l.id);return true;
+  }catch(e){err(e);return false}
+}
+
 /* ---------- Listas ---------- */
 function drawL(){
   CL=null;
   pan.innerHTML=`<div class="ct-card"><div class="ct-row" style="justify-content:space-between;margin:0"><h2 style="margin:0">📦 Listas de contagem</h2><div><button class="cb" id="ctRf">↻</button></div></div>
   <div class="ct-note">${esc(U.email)}</div>
   <div class="ct-row"><input id="ctN" class="ct-in" style="flex:1" value="Contagem ${new Date().toLocaleDateString('pt-BR')}"><button class="cb p" id="ctNew">+ Criar lista</button></div>
-  ${L.length?L.map((l,i)=>`<div class="ct-l"><div><b>${esc(l.nome)}</b><div class="ct-note">${l.itens.length} itens · ${tot(l)} un. · criada ${fdt(l.criado_em)}</div></div><button class="cb d" data-o="${i}">Abrir</button></div>`).join(''):'<p class="ct-note">Nenhuma lista. Crie a primeira acima.</p>'}</div>`;
+  ${L.length?L.map((l,i)=>`<div class="ct-l"><div><b>${esc(l.nome)}</b><div class="ct-note">${l.itens.length} itens · ${tot(l)} un. · criada ${fdt(l.criado_em)}</div></div><div style="display:flex;gap:6px"><button class="cb d" data-o="${i}">Abrir</button><button class="cb r" data-del="${i}" title="Excluir lista">🗑️</button></div></div>`).join(''):'<p class="ct-note">Nenhuma lista. Crie a primeira acima.</p>'}</div>`;
   q('#ctRf').onclick=async()=>{try{await load()}catch(e){err(e)}render()};
   q('#ctNew').onclick=async()=>{const n=q('#ctN').value.trim();if(!n)return;
     const{data,error}=await sb.from('listas_contagem').insert({nome:n}).select().single();if(error)return err(error);
     const l={...data,itens:[]};L.unshift(l);drawList(l)};
   pan.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>drawList(L[+b.dataset.o]));
+  pan.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(await delList(L[+b.dataset.del]))drawL()});
 }
 function drawList(l){
   CL=l;
@@ -1051,13 +1072,12 @@ function drawList(l){
   <h2>${esc(l.nome)}</h2><div class="ct-note">${l.itens.length} itens · ${tot(l)} unidades</div>
   <div class="ct-row"><b>Relatório:</b><label class="ct-note" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="ctImg" checked> com fotos</label>
   <button class="cb" data-r="pdf">📄 PDF</button><button class="cb" data-r="xlsx">📊 Excel</button><button class="cb" data-r="csv">CSV</button><button class="cb" data-r="wpp">💬 WhatsApp</button></div>
-  <div class="ct-row"><button class="cb" id="ctRen">Renomear</button><button class="cb r" id="ctDel">Excluir lista</button></div>
+  <div class="ct-row"><button class="cb" id="ctRen">Renomear</button><button class="cb r" id="ctDel">🗑️ Excluir lista</button></div>
   ${l.itens.length?l.itens.map((it,i)=>`<div class="ct-it" data-i="${i}">${it.fotos[0]?`<img class="ct-th" data-ph="${esc(it.fotos[0])}" alt="">`:'<span class="ct-th"></span>'}<span class="nm">${esc(it.descricao||'(sem cadastro)')}<br><span class="ct-note mono">${esc(it.codigo)}${it.sku?' · '+esc(it.sku):''} · ${it.fotos.length} foto(s)</span></span><span class="ct-bd">${it.qtd} un.</span></div>`).join(''):'<p class="ct-note">Lista vazia. Toque em ▶ Começar contagem.</p>'}</div>`;
   fill(pan);
   q('#ctBk').onclick=drawL;q('#ctGo').onclick=start;
   q('#ctRen').onclick=async()=>{const n=prompt('Novo nome:',l.nome);if(!n?.trim())return;const{error}=await sb.from('listas_contagem').update({nome:n.trim()}).eq('id',l.id);if(error)return err(error);l.nome=n.trim();drawList(l)};
-  q('#ctDel').onclick=async()=>{if(!confirm(`Excluir a lista "${l.nome}" e todas as fotos?`))return;
-    try{await rmPh(l.itens.flatMap(i=>i.fotos));const{error}=await sb.from('listas_contagem').delete().eq('id',l.id);if(error)throw error;L=L.filter(x=>x!==l);drawL()}catch(e){err(e)}};
+  q('#ctDel').onclick=async()=>{if(await delList(l))drawL()};
   pan.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>rep(l,b.dataset.r,q('#ctImg').checked,b));
   pan.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>editItem(+b.dataset.i));
 }
@@ -1091,17 +1111,27 @@ function editItem(i){
 
 /* ---------- Sessão de contagem ---------- */
 async function start(){
-  q('#ctS').classList.add('open');pend=null;flash='';drawB();
+  q('#ctS').classList.add('open');pend=null;flash='';det=null;drawB();
   try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},audio:false});q('#ctV').srcObject=stream;await q('#ctV').play()}
   catch(e){flash='❌ Câmera indisponível: '+(e.message||e);drawB()}
-  if('BarcodeDetector' in window){try{const fm=await BarcodeDetector.getSupportedFormats();det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'].filter(f=>fm.includes(f))});loop()}catch(e){det=null}}
-  if(!det){flash='Leitura automática indisponível: digite o código ou use leitor USB.';drawB()}
+  if(!('BarcodeDetector' in window)){flash='⏳ Carregando leitor de código...';drawB()}
+  const BD=await getBD();
+  if(BD&&stream){
+    try{
+      const want=['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'];
+      let fm=want;try{fm=await BD.getSupportedFormats()}catch(e){}
+      det=new BD({formats:want.filter(f=>fm.includes(f))});
+      if(flash.startsWith('⏳')){flash='';drawB()}
+      loop();
+    }catch(e){det=null}
+  }
+  if(!det&&stream){flash='Leitura automática indisponível: digite o código ou use leitor USB.';drawB()}
   mic(true);
   try{wl=await navigator.wakeLock?.request('screen')}catch(e){}
 }
 async function loop(){
   if(!stream||!det)return;const v=q('#ctV');
-  if(!busy&&v.readyState>=2){busy=true;try{const r=await det.detect(v);if(r[0])onCode(r[0].rawValue)}catch(e){}busy=false}
+  if(!busy&&v.readyState>=2&&v.videoWidth){busy=true;try{const r=await det.detect(v);if(r[0])onCode(r[0].rawValue)}catch(e){}busy=false}
   setTimeout(loop,250);
 }
 function onCode(c){
